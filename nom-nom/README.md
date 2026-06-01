@@ -64,6 +64,9 @@ Start the backend:
 node index.js
 ```
 
+## Check it here: 
+https://random-ideas-ochre.vercel.app/
+
 ## 😄 Disclaimer
 
 This project was built for fun, experimentation, and food-related procrastination.
