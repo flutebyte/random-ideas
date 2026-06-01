@@ -4,6 +4,8 @@ const http       = require('http');
 const { Server } = require('socket.io');
 const mongoose   = require('mongoose');
 const cors       = require('cors');
+const fs         = require('fs');
+const path       = require('path');
 
 const Dish    = require('./models/Dish');
 const Message = require('./models/Message');
@@ -159,6 +161,17 @@ io.on('connection', (socket) => {
     console.log('🔌 Client disconnected:', socket.id);
   });
 });
+
+const clientBuildPath = path.resolve(__dirname, '../client/dist');
+if (fs.existsSync(clientBuildPath)) {
+  app.use(express.static(clientBuildPath));
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+      return res.status(404).end();
+    }
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+}
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
