@@ -4,7 +4,7 @@ const http       = require('http');
 const { Server } = require('socket.io');
 const mongoose   = require('mongoose');
 const cors       = require('cors');
-
+const path = require('path');
 const Dish    = require('./models/Dish');
 const Message = require('./models/Message');
 
@@ -158,6 +158,12 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('🔌 Client disconnected:', socket.id);
   });
+});
+
+app.use(express.static(path.join(__dirname, '../client/dist')));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 
 const PORT = process.env.PORT || 3001;
