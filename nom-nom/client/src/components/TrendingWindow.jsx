@@ -20,7 +20,7 @@ export default function TrendingWindow({ onClose, onAddToWishlist }) {
   async function loadVideos(q) {
     setLoading(true); setError(null); setActive(null);
     try {
-      const res  = await fetch(`http://localhost:3001/api/trending?q=${encodeURIComponent(q)}`);
+      const res  = await fetch(`/api/trending?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
       const seen = getSeen();

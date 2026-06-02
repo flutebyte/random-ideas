@@ -34,9 +34,9 @@ export default function App() {
 
   // ── Initial data load ────────────────────────────────────────────────────
   useEffect(() => {
-    fetch('http://localhost:3001/api/dishes')
+    fetch('/api/dishes')
       .then(r => r.json()).then(setDishes).catch(console.error);
-    fetch('http://localhost:3001/api/messages')
+    fetch('/api/messages')
       .then(r => r.json()).then(setMessages).catch(console.error);
   }, []);
 
