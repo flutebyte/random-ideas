@@ -65,7 +65,7 @@ node index.js
 ```
 
 ## Check it here: 
-https://random-ideas-ochre.vercel.app/
+https://random-ideas-1-u1zv.onrender.com/
 
 ## 😄 Disclaimer
 
