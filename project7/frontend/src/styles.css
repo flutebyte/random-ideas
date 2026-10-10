@@ -187,3 +187,6 @@ footer { margin-top: 28px; color: var(--text-muted); font-size: 12.5px; text-ali
 .meanings { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--text-muted); margin: 6px 0 0; }
 .meanings code { background: var(--hover); padding: 0 6px; border-radius: 5px; color: var(--text-secondary); }
 @media (max-width: 620px) { .col-row { grid-template-columns: 1fr; } }
+.src.verified { color: var(--text-muted); }
+.res-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.res-head h2 { margin: 0; }

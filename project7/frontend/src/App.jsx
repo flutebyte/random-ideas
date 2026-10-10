@@ -6,6 +6,7 @@ import ColumnReview from './components/ColumnReview.jsx'
 import Progress from './components/Progress.jsx'
 import DataGlance from './components/DataGlance.jsx'
 import FindingCard from './components/FindingCard.jsx'
+import { buildReport, downloadReport } from './report.js'
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
@@ -95,7 +96,12 @@ export default function App() {
 
         {showResults && (
           <section aria-label="Findings" className="findings">
-            <h2>{state.phase === 'done' ? 'What we found' : 'Checking your data…'}</h2>
+            <div className="res-head">
+              <h2>{state.phase === 'done' ? 'What we found' : 'Checking your data…'}</h2>
+              {state.phase === 'done' && (
+                <button className="btn secondary" onClick={() => downloadReport(buildReport(state))}>Download report</button>
+              )}
+            </div>
             {state.plan.map((p, i) => (
               <FindingCard
                 key={p.id}

@@ -33,6 +33,21 @@ docker run -p 8000:8000 -e ANTHROPIC_API_KEY=... -v datalens-data:/data datalens
 Give the container at least 2 GB RAM and enough disk for about 3x your largest upload (CSV plus DuckDB table plus spill).
 Put it behind a proxy that allows large request bodies and long-lived responses (SSE), and set `TRUST_PROXY=1`.
 
+## How it compares
+
+Positioning against the tools people reach for today (summarised from their public feature sets, not benchmarked head to head):
+
+| | DataLens | ChatGPT data analysis / Julius-style chat tools | ydata-profiling / Sweetviz | BI copilots (Power BI, Tableau) |
+|---|---|---|---|---|
+| Starts with | Upload, it decides what matters | You must know what to ask | Automatic report | A built dashboard and a licence |
+| Who computes the numbers | SQL on the full file | Model-written code (can be wrong or skipped) | Code | Engine |
+| Model can misquote a number | No: every figure in the text is checked against the result, else replaced | Yes, nothing checks it | n/a (no prose) | Yes |
+| Plain-English "so what" | Yes | Yes | No, raw stats | Partial |
+| Files around 1 GB | DuckDB, streamed | Typically small upload limits | Struggles (pandas, in memory) | Needs modelling first |
+| Audience | Non-technical staff | Anyone who can prompt | Data scientists | Analysts |
+
+What is new here is the **number check** (`backend/verify.py`): the AI's wording is only shown if every figure in it traces to the SQL result, which none of the chat-style tools guarantee. Trade-off: DataLens answers a fixed menu of six analysis types and has no free-form questions yet.
+
 ## How it stays honest
 
 The model never computes anything. It picks from six analysis types; every number comes from SQL in

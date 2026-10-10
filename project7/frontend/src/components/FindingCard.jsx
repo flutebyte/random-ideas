@@ -49,7 +49,13 @@ export default function FindingCard({ index, plan, finding, explanation, skipped
               <p>{explanation.explanation}</p>
               <p className="sowhat"><strong>What to do with this:</strong> {explanation.so_what}</p>
               {explanation.caveat && <p className="caveat">Keep in mind: {explanation.caveat}</p>}
-              {explanation.source === 'template' && <p className="src">Built-in summary (AI not used)</p>}
+              {explanation.verified && (
+                <p className="src verified">
+                  {explanation.verified.checked === 0 ? 'No figures quoted.' : `✓ All ${explanation.verified.checked} figures in this text were checked against the calculation below.`}
+                  {explanation.replaced_after_check && ' The AI wording quoted a number we could not trace, so a built-in summary is shown instead.'}
+                </p>
+              )}
+              {explanation.source === 'template' && !explanation.replaced_after_check && <p className="src">Built-in summary (AI not used)</p>}
             </div>
           ) : (
             <p className="writing"><span className="pulse small" aria-hidden="true" /> Writing this up in plain English…</p>

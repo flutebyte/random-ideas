@@ -10,7 +10,8 @@ from typing import AsyncIterator
 
 import config
 from analyses import AnalysisSkipped, heuristic_plan, run_analysis, validate_plan
-from llm import LLM
+from llm import LLM, template_explanation
+from verify import check_numbers
 from profiler import DatasetError, build_profile, open_dataset
 
 log = logging.getLogger("pipeline")
@@ -34,7 +35,13 @@ def _public_profile(profile: dict) -> dict:
 
 
 async def _explain(llm: LLM, fid: str, result: dict, context: str) -> tuple[str, dict]:
-    return fid, await llm.explain(result, context)
+    exp = await llm.explain(result, context)
+    check = check_numbers(exp, result)
+    if check["unverified"] and exp.get("source") == "ai":
+        log.warning("explanation %s had untraceable numbers %s; using template", fid, check["unverified"])
+        exp = {**template_explanation(result), "source": "template", "replaced_after_check": True}
+        check = check_numbers(exp, result)
+    return fid, {**exp, "verified": {"checked": check["checked"], "unverified": check["unverified"]}}
 
 
 async def run_pipeline(work_dir: Path, csv_path: Path, include_samples: bool, llm: LLM,
