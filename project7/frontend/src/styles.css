@@ -190,3 +190,9 @@ footer { margin-top: 28px; color: var(--text-muted); font-size: 12.5px; text-ali
 .src.verified { color: var(--text-muted); }
 .res-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .res-head h2 { margin: 0; }
+.ask { margin-top: 32px; }
+.ask h2 { margin-bottom: 4px; }
+.ask-form { display: flex; gap: 8px; margin: 12px 0 6px; }
+.ask-form input { flex: 1; min-width: 0; padding: 11px 12px; border: 1px solid var(--border, #d0d5dd); border-radius: 8px; font: inherit; background: var(--surface, transparent); color: inherit; }
+.ask-form .btn.primary { width: auto; margin: 0; }
+.ideas { font-size: 13.5px; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }

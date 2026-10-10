@@ -21,6 +21,8 @@ export const initialState = {
   findings: {},
   explanations: {},
   skipped: {},
+  canAsk: false,
+  answers: [],
   error: null,
 }
 
@@ -36,6 +38,8 @@ export function reducer(state, action) {
       return { ...state, uploadPct: action.pct }
     case 'analysis_start':
       return { ...state, phase: 'analyzing', stage: 'loading', message: 'Starting...' }
+    case 'answer':
+      return { ...state, answers: [...state.answers, action.answer] }
     case 'fail':
       return { ...state, phase: 'error', error: action.message }
     case 'event':
@@ -60,7 +64,7 @@ function applyEvent(state, e) {
     case 'finding_skipped':
       return { ...state, skipped: { ...state.skipped, [e.id]: e.reason } }
     case 'done':
-      return { ...state, phase: 'done', stage: null, message: '' }
+      return { ...state, phase: 'done', stage: null, message: '', canAsk: !!e.can_ask }
     case 'error':
       return { ...state, phase: 'error', error: e.message }
     default:

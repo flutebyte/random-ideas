@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import { getHealth, getPreview, saveNotes, streamAnalysis, uploadFile } from './api.js'
+import { endSession, getHealth, getPreview, saveNotes, streamAnalysis, uploadFile } from './api.js'
 import { initialState, reducer } from './state.js'
 import UploadCard from './components/UploadCard.jsx'
 import ColumnReview from './components/ColumnReview.jsx'
 import Progress from './components/Progress.jsx'
 import DataGlance from './components/DataGlance.jsx'
 import FindingCard from './components/FindingCard.jsx'
+import AskBox from './components/AskBox.jsx'
 import { buildReport, downloadReport } from './report.js'
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
 
   const reset = () => {
     closeStream.current?.()
+    if (state.datasetId) endSession(state.datasetId)
     dispatch({ type: 'reset' })
   }
 
@@ -113,6 +115,11 @@ export default function App() {
               />
             ))}
           </section>
+        )}
+
+        {state.phase === 'done' && state.canAsk && (
+          <AskBox datasetId={state.datasetId} profile={state.profile} answers={state.answers}
+                  onAnswer={(answer) => dispatch({ type: 'answer', answer })} />
         )}
       </main>
 

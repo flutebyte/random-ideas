@@ -67,3 +67,19 @@ export function streamAnalysis(datasetId, { samples }, onEvent, onFail) {
     es.close()
   }
 }
+
+export async function askQuestion(datasetId, question) {
+  const r = await fetch(`/api/ask/${datasetId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  })
+  const body = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Could not answer that question.')
+  return body
+}
+
+/** Deletes the kept file on the server right away (it also expires on its own). */
+export function endSession(datasetId) {
+  fetch(`/api/session/${datasetId}`, { method: 'DELETE', keepalive: true }).catch(() => {})
+}

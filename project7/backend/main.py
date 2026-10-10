@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import config
+from ask import MAX_QUESTION_CHARS, answer_question
 from llm import LLM
 from pipeline import run_pipeline
 from profiler import DatasetError, preview_dataset
@@ -24,6 +25,7 @@ llm = LLM()
 slots = asyncio.Semaphore(config.MAX_CONCURRENT_ANALYSES)
 started: set[str] = set()
 _uploads: dict[str, deque] = defaultdict(deque)
+sessions: dict[str, dict] = {}  # dataset_id -> kept dataset for follow-up questions (expires, then deleted)
 notes: dict[str, dict] = {}  # dataset_id -> {"context": str, "labels": {column: meaning}}
 
 
@@ -46,14 +48,26 @@ def _check_rate_limit(request: Request) -> None:
     window.append(now)
 
 
+def _close_session(dataset_id: str) -> None:
+    sess = sessions.pop(dataset_id, None)
+    if sess:
+        try:
+            sess["con"].close()
+        except Exception:
+            pass
+        shutil.rmtree(sess["work_dir"], ignore_errors=True)
+
+
 async def _sweeper() -> None:
     """Delete abandoned uploads so a hosted disk never fills up."""
     while True:
         await asyncio.sleep(600)
+        for dataset_id in [k for k, v in sessions.items() if v["expires"] < time.monotonic()]:
+            _close_session(dataset_id)
         cutoff = time.time() - config.DATASET_TTL_SECONDS
         for d in config.DATA_DIR.glob("*"):
             try:
-                if d.is_dir() and d.stat().st_mtime < cutoff and d.name not in started:
+                if d.is_dir() and d.stat().st_mtime < cutoff and d.name not in started and d.name not in sessions:
                     shutil.rmtree(d, ignore_errors=True)
             except OSError:
                 pass
@@ -70,6 +84,8 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(_sweeper())
     yield
     task.cancel()
+    for dataset_id in list(sessions):
+        _close_session(dataset_id)
 
 
 app = FastAPI(title="DataLens API", lifespan=lifespan)
@@ -155,6 +171,8 @@ async def analyze(dataset_id: str, consent: int = 0, samples: int = 0):
     if consent != 1:
         raise HTTPException(400, "You must accept the data-sharing terms before analysis.")
     csv_path = _dataset_path(dataset_id)
+    if dataset_id in sessions:
+        raise HTTPException(404, "This upload has expired. Please upload the file again.")
     work_dir = csv_path.parent
     if dataset_id in started:
         raise HTTPException(409, "This file is already being analyzed.")
@@ -163,13 +181,16 @@ async def analyze(dataset_id: str, consent: int = 0, samples: int = 0):
 
     async def stream():
         queue: asyncio.Queue = asyncio.Queue()
+        keep: dict = {}
 
         async def produce():
             try:
                 async with slots:
-                    async for evt in run_pipeline(work_dir, csv_path, bool(samples), llm, user_notes['context'], user_notes['labels']):
+                    async for evt in run_pipeline(work_dir, csv_path, bool(samples), llm, user_notes['context'], user_notes['labels'], keep):
                         await queue.put(evt)
             finally:
+                if keep.get("con") is not None:
+                    sessions[dataset_id] = {**keep, "expires": time.monotonic() + config.SESSION_TTL_SECONDS}
                 await queue.put(None)
 
         producer = asyncio.create_task(produce())
@@ -188,10 +209,34 @@ async def analyze(dataset_id: str, consent: int = 0, samples: int = 0):
         finally:
             producer.cancel()
             started.discard(dataset_id)
-            shutil.rmtree(work_dir, ignore_errors=True)
+            if dataset_id not in sessions:
+                shutil.rmtree(work_dir, ignore_errors=True)
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+class Question(BaseModel):
+    question: str = Field(min_length=3, max_length=MAX_QUESTION_CHARS)
+
+
+@app.post("/api/ask/{dataset_id}")
+async def ask(dataset_id: str, body: Question):
+    """Answer a follow-up question about a file that was just analyzed (kept briefly, then deleted)."""
+    sess = sessions.get(dataset_id)
+    if sess is None:
+        raise HTTPException(404, "This file is no longer available for questions. Please upload it again.")
+    if sess["asked"] >= config.MAX_QUESTIONS:
+        raise HTTPException(429, "That's the question limit for this file. Please upload it again to keep asking.")
+    async with sess["lock"], slots:
+        sess["expires"] = time.monotonic() + config.SESSION_TTL_SECONDS
+        return await answer_question(llm, sess, body.question)
+
+
+@app.delete("/api/session/{dataset_id}")
+async def end_session(dataset_id: str):
+    _close_session(dataset_id)
+    return {"ok": True}
 
 
 @app.exception_handler(HTTPException)

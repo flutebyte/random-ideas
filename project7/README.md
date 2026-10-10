@@ -48,6 +48,14 @@ Positioning against the tools people reach for today (summarised from their publ
 
 What is new here is the **number check** (`backend/verify.py`): the AI's wording is only shown if every figure in it traces to the SQL result, which none of the chat-style tools guarantee. Trade-off: DataLens answers a fixed menu of six analysis types and has no free-form questions yet.
 
+## Ask your own question
+
+After the analysis, type a question ("Does salary differ by department?"). Claude only maps it to one of the six analyses
+(in demo mode, keyword matching on column names does this), then the same validated, SQL-computed, number-checked pipeline
+answers it. Questions that none of the six can answer are declined with a suggestion instead of guessed at.
+To make this possible the analyzed file is kept for `SESSION_TTL_SECONDS` (default 15 min), up to `MAX_QUESTIONS` (15) per file,
+and deleted when it expires, when the user clicks "Analyze another file", or when the server stops.
+
 ## How it stays honest
 
 The model never computes anything. It picks from six analysis types; every number comes from SQL in

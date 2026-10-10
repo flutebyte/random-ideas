@@ -70,7 +70,16 @@ def test_api_upload_and_stream(client, sample_csv):
     assert client.get(f"/api/analyze/{did}?consent=0").status_code == 400
     events = parse_sse(client.get(f"/api/analyze/{did}?consent=1&samples=0").text)
     assert events[0]["stage"] == "queued" and events[-1]["event"] == "done"
-    assert client.get(f"/api/analyze/{did}?consent=1").status_code == 404  # deleted after the run
+    assert events[-1]["can_ask"] is True
+    assert client.get(f"/api/analyze/{did}?consent=1").status_code == 404  # no second run on a kept file
+
+    ans = client.post(f"/api/ask/{did}", json={"question": "Does revenue differ by region?"}).json()
+    assert ans["answered"] and ans["explanation"]["verified"]["unverified"] == []
+    assert client.post(f"/api/ask/{did}", json={"question": "ab"}).status_code == 422
+
+    assert client.delete(f"/api/session/{did}").json() == {"ok": True}
+    assert client.post(f"/api/ask/{did}", json={"question": "Does revenue differ by region?"}).status_code == 404
+    assert not (config.DATA_DIR / did).exists()  # everything deleted with the session
 
 
 def test_api_rejects_bad_uploads(client, monkeypatch):

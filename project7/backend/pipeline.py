@@ -34,7 +34,7 @@ def _public_profile(profile: dict) -> dict:
     }
 
 
-async def _explain(llm: LLM, fid: str, result: dict, context: str) -> tuple[str, dict]:
+async def explain_checked(llm: LLM, fid: str, result: dict, context: str) -> tuple[str, dict]:
     exp = await llm.explain(result, context)
     check = check_numbers(exp, result)
     if check["unverified"] and exp.get("source") == "ai":
@@ -45,8 +45,11 @@ async def _explain(llm: LLM, fid: str, result: dict, context: str) -> tuple[str,
 
 
 async def run_pipeline(work_dir: Path, csv_path: Path, include_samples: bool, llm: LLM,
-                       context: str = "", labels: dict | None = None) -> AsyncIterator[dict]:
+                       context: str = "", labels: dict | None = None, keep: dict | None = None) -> AsyncIterator[dict]:
+    """If `keep` is given and the run succeeds, the open dataset is stored in it (for follow-up questions)
+    instead of being deleted; the caller then owns cleanup."""
     con = None
+    kept = False
     tasks: dict[str, asyncio.Task] = {}
     try:
         yield _status("loading", "Reading your file...")
@@ -86,7 +89,7 @@ async def run_pipeline(work_dir: Path, csv_path: Path, include_samples: bool, ll
                 continue
             results[spec["id"]] = result
             yield {"event": "finding", **{k: v for k, v in result.items() if k != "hints"}}
-            tasks[spec["id"]] = asyncio.create_task(_explain(llm, spec["id"], result, context))
+            tasks[spec["id"]] = asyncio.create_task(explain_checked(llm, spec["id"], result, context))
 
         if not results:
             yield {"event": "error", "message": "None of the planned checks could be completed on this file."}
@@ -97,7 +100,10 @@ async def run_pipeline(work_dir: Path, csv_path: Path, include_samples: bool, ll
             fid, exp = await fut
             yield {"event": "explanation", "id": fid, **exp}
 
-        yield {"event": "done", "findings": len(results), "mode": mode}
+        if keep is not None:
+            keep.update(con=con, profile=profile, context=context, work_dir=work_dir, asked=0, lock=asyncio.Lock())
+            kept = True
+        yield {"event": "done", "findings": len(results), "mode": mode, "can_ask": kept}
     except DatasetError as e:
         yield {"event": "error", "message": str(e)}
     except Exception:
@@ -107,9 +113,10 @@ async def run_pipeline(work_dir: Path, csv_path: Path, include_samples: bool, ll
         for t in tasks.values():
             if not t.done():
                 t.cancel()
-        if con is not None:
-            try:
-                con.close()
-            except Exception:
-                pass
-        shutil.rmtree(work_dir, ignore_errors=True)
+        if not kept:
+            if con is not None:
+                try:
+                    con.close()
+                except Exception:
+                    pass
+            shutil.rmtree(work_dir, ignore_errors=True)

@@ -22,6 +22,8 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MAX_CONCURRENT_ANALYSES = int(os.environ.get("MAX_CONCURRENT_ANALYSES", "2"))
 UPLOADS_PER_HOUR = int(os.environ.get("UPLOADS_PER_HOUR", "10"))
 DATASET_TTL_SECONDS = int(os.environ.get("DATASET_TTL_SECONDS", "3600"))
+SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "900"))
+MAX_QUESTIONS = int(os.environ.get("MAX_QUESTIONS", "15"))
 TRUST_PROXY = os.environ.get("TRUST_PROXY", "0") == "1"
 
 MAX_FINDINGS = 5
