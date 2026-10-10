@@ -148,7 +148,62 @@ def open_dataset(csv_path: Path, work_dir: Path) -> duckdb.DuckDBPyConnection:
     if rows == 0 or cols == 0:
         con.close()
         raise DatasetError("This file has no data rows we could read.")
+    _clean_formatted_numbers(con)
     return con
+
+
+_FORMATTED = r"[$€£¥₹]|\d,\d{3}|\d\s*%"
+
+
+def _clean_formatted_numbers(con) -> None:
+    """Turn text columns like "$1,234", "12%" or "(50)" into real numbers.
+
+    Spreadsheets export money and percentages as text, which would otherwise hide the most
+    business-relevant columns from every analysis. Only columns that are almost entirely numeric
+    AND show formatting characters are converted, so zip codes and IDs with leading zeros are left alone.
+    """
+    con.execute("CREATE TABLE IF NOT EXISTS _cleaned (name VARCHAR, lost BIGINT)")
+    cols = con.execute("SELECT name FROM pragma_table_info('data') WHERE type = 'VARCHAR'").fetchall()
+    for (name,) in cols:
+        qc = q(name)
+        looks_formatted = con.execute(
+            f"SELECT count(*) FROM (SELECT {qc} v FROM data WHERE {qc} IS NOT NULL LIMIT 2000) "
+            f"WHERE regexp_matches(v, '{_FORMATTED}')"
+        ).fetchone()[0]
+        if not looks_formatted:  # cheap sample check first: most text columns are plain text
+            continue
+        strip = rf"regexp_replace({qc}, '[$€£¥₹,%\s]', '', 'g')"
+        expr = rf"TRY_CAST(regexp_replace({strip}, '^\((.*)\)$', '-\1') AS DOUBLE)"
+        nn, ok, fmt = con.execute(
+            f"SELECT count({qc}), count({expr}), count(*) FILTER (WHERE regexp_matches({qc}, '{_FORMATTED}')) FROM data"
+        ).fetchone()
+        if nn >= 5 and fmt > 0 and ok / nn >= 0.95:
+            con.execute(f"ALTER TABLE data ALTER COLUMN {qc} SET DATA TYPE DOUBLE USING {expr}")
+            con.execute("INSERT INTO _cleaned VALUES (?, ?)", [name, nn - ok])
+
+
+MOSTLY_EMPTY_PCT = 40.0
+
+
+def _quality_warnings(cur, cols: list[dict]) -> list[str]:
+    """Plain-language data quality notes: exact duplicate rows and mostly-empty columns.
+    Both silently skew averages and counts, and non-technical users rarely spot them."""
+    out = []
+    try:
+        row_count, distinct_rows = cur.execute(
+            "SELECT count(*), count(DISTINCT hash(" + ", ".join(q(c["name"]) for c in cols[:200]) + ")) FROM data"
+        ).fetchone()
+        dupes = row_count - distinct_rows
+        if dupes > 0:
+            out.append(f"{dupes:,} rows ({dupes / row_count * 100:.1f}%) are exact copies of another row, "
+                       "so counts and averages may be inflated.")
+    except duckdb.Error:
+        pass  # too big to check within the memory limit: skip rather than fail the analysis
+    empty = [c["name"] for c in cols if c["kind"] != "empty" and c.get("null_pct", 0) >= MOSTLY_EMPTY_PCT]
+    if empty:
+        shown = ", ".join(f"'{n}'" for n in empty[:5]) + (f" and {len(empty) - 5} more" if len(empty) > 5 else "")
+        out.append(f"Mostly empty ({MOSTLY_EMPTY_PCT:.0f}%+ missing): {shown}. Results for these columns rest on few rows.")
+    return out
 
 
 def _rejected_rows(cur) -> int:
@@ -329,6 +384,11 @@ def _build_profile(cur, include_samples: bool, labels: dict) -> dict:
     warnings = []
     if rejected:
         warnings.append(f"{rejected:,} rows were skipped because they could not be read cleanly.")
+    for name, lost in cur.execute("SELECT name, lost FROM _cleaned").fetchall():
+        extra = f" ({lost:,} values that were not numbers were left blank)" if lost else ""
+        warnings.append(f"'{name}' was stored as text with symbols like $ or %; we read it as numbers{extra}.")
+
+    warnings.extend(_quality_warnings(cur, cols))
 
     for c in cols:
         c.pop("_base", None)
