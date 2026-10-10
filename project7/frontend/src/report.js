@@ -23,3 +23,19 @@ export function downloadReport(text) {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+/** Opens the browser's print dialog (choose "Save as PDF"). Charts are included; calculation tables are expanded. */
+export function printReport(fileName) {
+  const details = [...document.querySelectorAll('details.calc')]
+  const wasOpen = details.map((d) => d.open)
+  const oldTitle = document.title
+  details.forEach((d) => { d.open = true })
+  document.title = `DataLens report - ${fileName}`
+  const restore = () => {
+    details.forEach((d, i) => { d.open = wasOpen[i] })
+    document.title = oldTitle
+    window.removeEventListener('afterprint', restore)
+  }
+  window.addEventListener('afterprint', restore)
+  window.print()
+}

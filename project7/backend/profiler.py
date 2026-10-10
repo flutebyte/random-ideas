@@ -152,34 +152,50 @@ def open_dataset(csv_path: Path, work_dir: Path) -> duckdb.DuckDBPyConnection:
     return con
 
 
-_FORMATTED = r"[$€£¥₹]|\d,\d{3}|\d\s*%"
+_EURO = r"^\s*[-+]?[\d.]*\d,\d{1,2}\s*$"  # 12,34 or 1.234,56 (decimal comma)
+_FORMATTED = rf"[$€£¥₹]|\d,\d{{3}}|\d\s*%|{_EURO[1:-1]}"
+_MARKERS = "('n/a','na','#n/a','null','none','nan','nil','missing','unknown','-','--','?')"
+
+
+def _numeric_expr(qc: str, euro: bool) -> str:
+    """SQL turning "$1,234", "12%", "(50)", "1.234,56" into a DOUBLE; placeholder markers become NULL."""
+    text = f"replace(replace({qc}, '.', ''), ',', '.')" if euro else qc
+    drop = r"[$€£¥₹%\s]" if euro else r"[$€£¥₹,%\s]"
+    stripped = rf"regexp_replace({text}, '{drop}', '', 'g')"
+    return (f"CASE WHEN lower(trim({qc})) IN {_MARKERS} THEN NULL ELSE "
+            rf"TRY_CAST(regexp_replace({stripped}, '^\((.*)\)$', '-\1') AS DOUBLE) END")
 
 
 def _clean_formatted_numbers(con) -> None:
-    """Turn text columns like "$1,234", "12%" or "(50)" into real numbers.
+    """Turn text columns like "$1,234", "12%", "(50)", "12,5" or "N/A"-sprinkled numbers into real numbers.
 
-    Spreadsheets export money and percentages as text, which would otherwise hide the most
-    business-relevant columns from every analysis. Only columns that are almost entirely numeric
-    AND show formatting characters are converted, so zip codes and IDs with leading zeros are left alone.
+    Spreadsheets export money and percentages as text, and one stray "N/A" turns a whole numeric column
+    into text, which would hide the most business-relevant columns from every analysis. Only columns that
+    are almost entirely numeric AND show formatting characters or placeholder markers are converted, so
+    zip codes and IDs with leading zeros are left alone.
     """
-    con.execute("CREATE TABLE IF NOT EXISTS _cleaned (name VARCHAR, lost BIGINT)")
+    con.execute("CREATE TABLE IF NOT EXISTS _cleaned (name VARCHAR, lost BIGINT, markers BIGINT)")
     cols = con.execute("SELECT name FROM pragma_table_info('data') WHERE type = 'VARCHAR'").fetchall()
     for (name,) in cols:
         qc = q(name)
-        looks_formatted = con.execute(
-            f"SELECT count(*) FROM (SELECT {qc} v FROM data WHERE {qc} IS NOT NULL LIMIT 2000) "
-            f"WHERE regexp_matches(v, '{_FORMATTED}')"
-        ).fetchone()[0]
-        if not looks_formatted:  # cheap sample check first: most text columns are plain text
-            continue
-        strip = rf"regexp_replace({qc}, '[$€£¥₹,%\s]', '', 'g')"
-        expr = rf"TRY_CAST(regexp_replace({strip}, '^\((.*)\)$', '-\1') AS DOUBLE)"
-        nn, ok, fmt = con.execute(
-            f"SELECT count({qc}), count({expr}), count(*) FILTER (WHERE regexp_matches({qc}, '{_FORMATTED}')) FROM data"
+        sample_fmt, sample_euro, sample_n = con.execute(
+            f"SELECT count(*) FILTER (WHERE regexp_matches(v, '{_FORMATTED}') OR lower(trim(v)) IN {_MARKERS}), "
+            f"count(*) FILTER (WHERE regexp_matches(v, '{_EURO}')), "
+            f"count(*) FILTER (WHERE lower(trim(v)) NOT IN {_MARKERS}) "
+            f"FROM (SELECT {qc} v FROM data WHERE {qc} IS NOT NULL LIMIT 2000)"
         ).fetchone()
-        if nn >= 5 and fmt > 0 and ok / nn >= 0.95:
+        if not sample_fmt:  # cheap sample check first: most text columns are plain text
+            continue
+        expr = _numeric_expr(qc, euro=sample_euro > sample_n / 2)
+        nn, ok, fmt, mk = con.execute(
+            f"SELECT count(*) FILTER (WHERE {qc} IS NOT NULL AND lower(trim({qc})) NOT IN {_MARKERS}), "
+            f"count({expr}), "
+            f"count(*) FILTER (WHERE regexp_matches({qc}, '{_FORMATTED}')), "
+            f"count(*) FILTER (WHERE lower(trim({qc})) IN {_MARKERS}) FROM data"
+        ).fetchone()
+        if nn >= 5 and (fmt + mk) > 0 and ok / nn >= 0.95:
             con.execute(f"ALTER TABLE data ALTER COLUMN {qc} SET DATA TYPE DOUBLE USING {expr}")
-            con.execute("INSERT INTO _cleaned VALUES (?, ?)", [name, nn - ok])
+            con.execute("INSERT INTO _cleaned VALUES (?, ?, ?)", [name, nn - ok, mk])
 
 
 MOSTLY_EMPTY_PCT = 40.0
@@ -384,10 +400,14 @@ def _build_profile(cur, include_samples: bool, labels: dict) -> dict:
     warnings = []
     if rejected:
         warnings.append(f"{rejected:,} rows were skipped because they could not be read cleanly.")
-    for name, lost in cur.execute("SELECT name, lost FROM _cleaned").fetchall():
-        extra = f" ({lost:,} values that were not numbers were left blank)" if lost else ""
-        warnings.append(f"'{name}' was stored as text with symbols like $ or %; we read it as numbers{extra}.")
-
+    for name, lost, markers in cur.execute("SELECT name, lost, markers FROM _cleaned").fetchall():
+        notes = []
+        if markers:
+            notes.append(f"{markers:,} placeholders like N/A were left blank")
+        if lost:
+            notes.append(f"{lost:,} values that were not numbers were left blank")
+        extra = f" ({'; '.join(notes)})" if notes else ""
+        warnings.append(f"'{name}' was stored as text (symbols, decimal commas or N/A entries); we read it as numbers{extra}.")
     warnings.extend(_quality_warnings(cur, cols))
 
     for c in cols:

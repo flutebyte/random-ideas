@@ -19,7 +19,7 @@ def test_currency_percent_and_negative_text_become_numbers(tmp_path):
     assert cols["zip"]["kind"] != "numeric"  # leading zeros, no formatting: left alone
     assert con.execute("SELECT min(bonus) FROM data").fetchone()[0] == -50
     assert con.execute("SELECT max(bonus) FROM data").fetchone()[0] == 1290
-    assert any("'bonus'" in w and "1 values" in w for w in prof["warnings"])
+    assert any("'bonus'" in w and "1 placeholders" in w for w in prof["warnings"])
 
 
 def test_plain_text_columns_are_untouched(tmp_path):
@@ -41,3 +41,23 @@ def test_clean_file_has_no_quality_warnings(tmp_path):
     rows = [f"{i},{i},0{i},{i},w{i}" for i in range(30)]
     _, _, prof = _profile(tmp_path, rows)
     assert prof["warnings"] == []
+
+
+def test_decimal_comma_and_na_placeholders_become_numbers(tmp_path):
+    csv = tmp_path / "e.csv"
+    rows = [f"R{i % 3};{i + 1},{i % 90:02d};{'N/A' if i % 7 == 0 else i * 2}" for i in range(40)]
+    csv.write_text("region;price;score\n" + "\n".join(rows), encoding="utf-8")
+    con = profiler.open_dataset(csv, tmp_path / "w")
+    prof = profiler.build_profile(con, False)
+    kinds = {c["name"]: c["kind"] for c in prof["columns"]}
+    assert kinds["price"] == "numeric" and kinds["score"] == "numeric"
+    assert con.execute("SELECT min(price), max(price) FROM data").fetchone() == (1.0, 40.39)
+    assert con.execute("SELECT count(score) FROM data").fetchone()[0] == 34  # 6 placeholders blank
+    assert any("'score'" in w and "6 placeholders" in w for w in prof["warnings"])
+
+
+def test_na_as_a_category_value_is_not_touched(tmp_path):
+    csv = tmp_path / "c.csv"
+    csv.write_text("cont,x\n" + "\n".join(f"{['NA', 'EU', 'AS'][i % 3]},{i}" for i in range(30)), encoding="utf-8")
+    con = profiler.open_dataset(csv, tmp_path / "w")
+    assert con.execute("SELECT count(*) FROM data WHERE cont = 'NA'").fetchone()[0] == 10

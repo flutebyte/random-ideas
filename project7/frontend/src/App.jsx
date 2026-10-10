@@ -7,7 +7,7 @@ import Progress from './components/Progress.jsx'
 import DataGlance from './components/DataGlance.jsx'
 import FindingCard from './components/FindingCard.jsx'
 import AskBox from './components/AskBox.jsx'
-import { buildReport, downloadReport } from './report.js'
+import { buildReport, downloadReport, printReport } from './report.js'
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
@@ -101,7 +101,10 @@ export default function App() {
             <div className="res-head">
               <h2>{state.phase === 'done' ? 'What we found' : 'Checking your data…'}</h2>
               {state.phase === 'done' && (
-                <button className="btn secondary" onClick={() => downloadReport(buildReport(state))}>Download report</button>
+                <span className="res-actions">
+                  <button className="btn secondary" onClick={() => printReport(state.fileName)}>Print / save as PDF</button>
+                  <button className="btn secondary" onClick={() => downloadReport(buildReport(state))}>Download report</button>
+                </span>
               )}
             </div>
             {state.plan.map((p, i) => (
