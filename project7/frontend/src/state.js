@@ -20,6 +20,7 @@ export const initialState = {
   plan: [],
   findings: {},
   explanations: {},
+  summary: [],
   skipped: {},
   canAsk: false,
   answers: [],
@@ -61,6 +62,8 @@ function applyEvent(state, e) {
       return { ...state, findings: { ...state.findings, [e.id]: e } }
     case 'explanation':
       return { ...state, explanations: { ...state.explanations, [e.id]: e } }
+    case 'summary':
+      return { ...state, summary: e.items }
     case 'finding_skipped':
       return { ...state, skipped: { ...state.skipped, [e.id]: e.reason } }
     case 'done':

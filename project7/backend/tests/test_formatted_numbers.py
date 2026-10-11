@@ -34,7 +34,7 @@ def test_duplicate_rows_and_mostly_empty_columns_are_flagged(tmp_path):
     rows = base + [base[0]] * 3  # three extra copies of one row
     _, _, prof = _profile(tmp_path, rows)
     assert any(w.startswith("3 rows") and "exact copies" in w for w in prof["warnings"])
-    assert any("Mostly empty" in w and "'note'" in w for w in prof["warnings"])
+    assert not any("Mostly empty" in w for w in prof["warnings"])  # the frontend reports missing values, once
 
 
 def test_clean_file_has_no_quality_warnings(tmp_path):

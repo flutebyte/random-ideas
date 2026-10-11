@@ -11,6 +11,7 @@ from typing import AsyncIterator
 import config
 from analyses import AnalysisSkipped, heuristic_plan, run_analysis, validate_plan
 from llm import LLM, template_explanation
+from ranking import short_version
 from verify import check_numbers
 from profiler import DatasetError, build_profile, open_dataset
 
@@ -96,9 +97,15 @@ async def run_pipeline(work_dir: Path, csv_path: Path, include_samples: bool, ll
             return
 
         yield _status("explaining", "Putting it into plain language...")
+        explanations: dict[str, dict] = {}
         for fut in asyncio.as_completed(list(tasks.values())):
             fid, exp = await fut
+            explanations[fid] = exp
             yield {"event": "explanation", "id": fid, **exp}
+
+        summary = short_version(results, explanations)
+        if summary:
+            yield {"event": "summary", "items": summary}
 
         if keep is not None:
             keep.update(con=con, profile=profile, context=context, work_dir=work_dir, asked=0, lock=asyncio.Lock())

@@ -21,7 +21,7 @@ const show = (v) => {
 export default function FindingCard({ index, plan, finding, explanation, skippedReason }) {
   const meanings = Object.entries(finding?.labels || plan.labels || {})
   return (
-    <article className={`card finding ${finding ? 'ready' : ''}`}>
+    <article id={`finding-${plan.id}`} className={`card finding ${finding ? 'ready' : ''}`}>
       <div className="f-head">
         <span className="f-num">{index}</span>
         <div>

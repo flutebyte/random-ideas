@@ -7,6 +7,7 @@ import Progress from './components/Progress.jsx'
 import DataGlance from './components/DataGlance.jsx'
 import FindingCard from './components/FindingCard.jsx'
 import AskBox from './components/AskBox.jsx'
+import ShortVersion from './components/ShortVersion.jsx'
 import { buildReport, downloadReport, printReport } from './report.js'
 
 export default function App() {
@@ -107,6 +108,7 @@ export default function App() {
                 </span>
               )}
             </div>
+            <ShortVersion items={state.summary} plan={state.plan} />
             {state.plan.map((p, i) => (
               <FindingCard
                 key={p.id}

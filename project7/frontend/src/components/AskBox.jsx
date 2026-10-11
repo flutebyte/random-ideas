@@ -40,8 +40,8 @@ export default function AskBox({ datasetId, profile, answers, onAnswer }) {
   }
 
   return (
-    <section className="ask" aria-label="Ask a question">
-      <h2>Ask your own question</h2>
+    <section className={`ask ${answers.length ? 'has-answers' : ''}`} aria-label="Ask a question">
+      <h2>{answers.length ? 'Your questions' : 'Ask your own question'}</h2>
       <p className="why">
         Answered the same way as above: computed exactly from your whole file, then checked. Your file is kept for
         15 minutes for this, then deleted.

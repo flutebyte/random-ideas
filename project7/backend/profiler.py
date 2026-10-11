@@ -198,12 +198,9 @@ def _clean_formatted_numbers(con) -> None:
             con.execute("INSERT INTO _cleaned VALUES (?, ?, ?)", [name, nn - ok, mk])
 
 
-MOSTLY_EMPTY_PCT = 40.0
-
-
 def _quality_warnings(cur, cols: list[dict]) -> list[str]:
-    """Plain-language data quality notes: exact duplicate rows and mostly-empty columns.
-    Both silently skew averages and counts, and non-technical users rarely spot them."""
+    """Plain-language data quality note for exact duplicate rows, which silently inflate counts and averages.
+    (Missing values are reported by the frontend, which has the per-column percentages.)"""
     out = []
     try:
         row_count, distinct_rows = cur.execute(
@@ -215,10 +212,6 @@ def _quality_warnings(cur, cols: list[dict]) -> list[str]:
                        "so counts and averages may be inflated.")
     except duckdb.Error:
         pass  # too big to check within the memory limit: skip rather than fail the analysis
-    empty = [c["name"] for c in cols if c["kind"] != "empty" and c.get("null_pct", 0) >= MOSTLY_EMPTY_PCT]
-    if empty:
-        shown = ", ".join(f"'{n}'" for n in empty[:5]) + (f" and {len(empty) - 5} more" if len(empty) > 5 else "")
-        out.append(f"Mostly empty ({MOSTLY_EMPTY_PCT:.0f}%+ missing): {shown}. Results for these columns rest on few rows.")
     return out
 
 
