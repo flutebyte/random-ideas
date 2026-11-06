@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+  body { width: 280px; margin: 0; font: 13px/1.4 "Segoe UI", Roboto, sans-serif;
+    background: #14161c; color: #e8eaed; padding: 14px; }
+  h1 { font-size: 14px; margin: 0 0 2px; color: #7aa2ff; }
+  .sub { color: #8b909b; font-size: 11px; margin-bottom: 12px; }
+  label { display: block; margin: 10px 0 3px; font-size: 12px; color: #b7bcc7; }
+  select, input[type=text], input[type=password], input[type=number] {
+    width: 100%; box-sizing: border-box; background: #0e1015; border: 1px solid #2a2e39;
+    color: #e8eaed; border-radius: 6px; padding: 6px 8px; font-size: 12px; }
+  .row { display: flex; gap: 8px; }
+  .row > div { flex: 1; }
+  .chk { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 12px; }
+  button { margin-top: 14px; width: 100%; background: #7aa2ff; border: none; color: #0e1015;
+    font-weight: 700; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .hint { font-size: 10px; color: #6b7280; margin-top: 4px; }
+  #status { text-align: center; font-size: 11px; color: #3ddc84; height: 14px; margin-top: 8px; }
+  a { color: #7aa2ff; }
+</style>
+</head>
+<body>
+  <h1>◆ ForexLens</h1>
+  <div class="sub">Free confluence signals for TradingView</div>
+
+  <div class="row">
+    <div>
+      <label>Fast TF</label>
+      <select id="fastTf">
+        <option>5m</option><option selected>15m</option><option>30m</option><option>1h</option>
+      </select>
+    </div>
+    <div>
+      <label>Higher TF</label>
+      <select id="slowTf">
+        <option>15m</option><option>30m</option><option>1h</option>
+        <option selected>1d</option><option>1wk</option><option value="1mo">1 month</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Reward:Risk</label>
+      <input type="number" id="rr" min="1" max="5" step="0.5" value="2"/>
+    </div>
+    <div>
+      <label>ATR stop ×</label>
+      <input type="number" id="atrMult" min="0.5" max="4" step="0.25" value="1.5"/>
+    </div>
+  </div>
+
+  <label>Index spread, round-trip (points) — scalp gate</label>
+  <input type="number" id="spreadPts" min="0" max="5" step="0.05" value="0.3"/>
+
+  <label class="chk"><input type="checkbox" id="notify" checked/> Desktop alerts on strong signals</label>
+  <label>Alert min confidence</label>
+  <input type="number" id="notifyMinConfidence" min="40" max="95" step="5" value="65"/>
+
+  <div class="hint" style="margin:12px 0 0;color:#ff9b3d">⚠ ForexFactory news awareness is always on. Red (high-impact) events force a stand-aside.</div>
+
+  <label class="chk"><input type="checkbox" id="useGemini"/> Use Gemini second-opinion (optional)</label>
+  <label>Gemini API key</label>
+  <input type="password" id="geminiKey" placeholder="AIza… (free tier)"/>
+  <div class="hint">Free key: <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>. Stored only on this device.</div>
+
+  <button id="save">Save settings</button>
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

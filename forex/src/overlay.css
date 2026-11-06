@@ -1,0 +1,114 @@
+#forexlens-panel {
+  position: fixed; top: 96px; right: 16px; z-index: 2147483647;
+  width: 300px; font: 12px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #e8eaed; background: #14161c; border: 1px solid #2a2e39;
+  border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  user-select: none; overflow: hidden;
+}
+#fl-head {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: #1b1e27; cursor: move; border-bottom: 1px solid #2a2e39;
+}
+#fl-logo { font-weight: 700; color: #7aa2ff; font-size: 12px; }
+#fl-sym { flex: 1; text-align: right; color: #9aa0aa; font-weight: 600; letter-spacing: .3px; }
+#fl-head button {
+  background: #2a2e39; border: none; color: #cfd3dc; width: 22px; height: 22px;
+  border-radius: 5px; cursor: pointer; font-size: 14px; line-height: 1;
+}
+#fl-head button:hover { background: #3a3f4d; }
+#fl-body { padding: 10px; }
+
+/* ---- news banner (red / orange focus) ---- */
+#fl-banner { margin-bottom: 8px; }
+#fl-banner:empty { display: none; }
+#fl-banner.red {
+  background: #3a0d14; border: 1px solid #ff6b81; border-radius: 8px; padding: 8px 10px;
+  animation: fl-pulse 1.4s ease-in-out infinite;
+}
+#fl-banner.orange {
+  background: #3a2a0d; border: 1px solid #ffb347; border-radius: 8px; padding: 7px 10px;
+}
+@keyframes fl-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,107,129,.0); }
+  50% { box-shadow: 0 0 0 4px rgba(255,107,129,.18); }
+}
+.fl-bhead { font-weight: 800; font-size: 12px; letter-spacing: .3px; }
+#fl-banner.red .fl-bhead { color: #ff6b81; }
+#fl-banner.orange .fl-bhead { color: #ffb347; }
+.fl-btitle { color: #e8eaed; font-size: 11px; margin-top: 3px; }
+.fl-bfc { color: #b7bcc7; font-size: 10px; margin-top: 3px; }
+.fl-bfc b { color: #fff; }
+
+/* when a red event is live, dim the (now untrustworthy) chart signal below */
+#fl-body.newsfocus #fl-badge,
+#fl-body.newsfocus #fl-confwrap,
+#fl-body.newsfocus #fl-meta,
+#fl-body.newsfocus #fl-reasons,
+#fl-body.newsfocus #fl-levels { opacity: .35; filter: grayscale(.6); }
+
+#fl-goldnote { margin-top: 8px; font-size: 10px; color: #ffb347; line-height: 1.3; }
+#fl-goldnote:empty { display: none; }
+#fl-goldnote b { color: #ffd27a; }
+
+#fl-badge {
+  text-align: center; font-size: 22px; font-weight: 800; letter-spacing: 1px;
+  padding: 10px; border-radius: 8px; margin-bottom: 8px; background: #22262f;
+}
+#fl-badge.buy { background: #113123; color: #3ddc84; }
+#fl-badge.sell { background: #3a1620; color: #ff6b81; }
+#fl-badge.neutral { background: #26282f; color: #9aa0aa; }
+#fl-badge.wait { background: #2e2a17; color: #ffb347; }
+
+/* "What to do" instruction box, tiered by conviction */
+#fl-advice { font-size: 11px; line-height: 1.35; padding: 7px 9px; border-radius: 7px;
+  margin-bottom: 8px; border-left: 3px solid #6b7280; background: #1b1e27; color: #cfd3dc; }
+#fl-advice:empty { display: none; }
+#fl-advice.tier-strong { border-left-color: #3ddc84; background: #10231a; color: #cdeede; }
+#fl-advice.tier-weak { border-left-color: #ffb347; background: #241d10; color: #ecdcc2; }
+#fl-advice.tier-wait { border-left-color: #6b7280; background: #1b1e27; color: #b7bcc7; }
+#fl-advice.tier-news { border-left-color: #ff6b81; background: #2a1015; color: #ffd0d7; font-weight: 600; }
+
+#fl-confwrap { height: 6px; background: #2a2e39; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+#fl-conf { height: 100%; width: 0; transition: width .4s ease; background: #7aa2ff; }
+#fl-conf.buy { background: #3ddc84; }
+#fl-conf.sell { background: #ff6b81; }
+#fl-conf.neutral { background: #6b7280; }
+#fl-conf.wait { background: #ffb347; }
+
+#fl-meta { font-size: 11px; color: #b7bcc7; margin-bottom: 8px; }
+#fl-meta b { color: #fff; }
+
+.fl-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+.fl-tag.aligned, .fl-tag.buy { background: #113123; color: #3ddc84; }
+.fl-tag.conflict, .fl-tag.sell { background: #3a1620; color: #ff6b81; }
+.fl-tag.counter { background: #3a2a0d; color: #ffb347; }
+.fl-tag.mixed, .fl-tag.neutral { background: #2a2e39; color: #b7bcc7; }
+
+.fl-r { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; border-top: 1px solid #22252e; }
+.fl-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: #6b7280; }
+.fl-dot.bull { background: #3ddc84; }
+.fl-dot.bear { background: #ff6b81; }
+.fl-rd { color: #8b909b; font-size: 10px; margin-left: auto; text-align: right; }
+
+.fl-lv { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid #22252e; font-size: 11px; }
+.fl-lv b { color: #fff; }
+.fl-lv .buy { color: #3ddc84; }
+.fl-lv .sell { color: #ff6b81; }
+.fl-muted { color: #8b909b; }
+
+.fl-llm { margin-top: 8px; padding-top: 8px; border-top: 1px solid #22252e; }
+#fl-engrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 10px; color: #9aa0aa; }
+#fl-engrow select { background: #0e1015; border: 1px solid #2a2e39; color: #e8eaed;
+  border-radius: 5px; padding: 3px 6px; font-size: 11px; }
+#fl-tfs { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 10px; color: #9aa0aa; }
+#fl-tfs label { display: flex; align-items: center; gap: 4px; }
+#fl-tfs select { background: #0e1015; border: 1px solid #2a2e39; color: #e8eaed;
+  border-radius: 5px; padding: 3px 4px; font-size: 11px; }
+#fl-manual { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+#fl-input { flex: 1; background: #0e1015; border: 1px solid #2a2e39; color: #e8eaed;
+  border-radius: 5px; padding: 4px 6px; font-size: 11px; text-transform: uppercase; }
+#fl-set { background: #7aa2ff; border: none; color: #0e1015; font-weight: 700;
+  border-radius: 5px; padding: 4px 8px; cursor: pointer; }
+#fl-autolabel { font-size: 10px; color: #9aa0aa; display: flex; align-items: center; gap: 3px; }
+#fl-disc { margin-top: 10px; font-size: 9px; color: #6b7280; line-height: 1.3; }
