@@ -68,7 +68,9 @@ async function analyzeScalp(symbol, s) {
   if (!signal.ok) return { ok: false, error: signal.error || 'analysis failed', symbol };
   if (signal.alignment !== 'aligned') { signal.action = 'NEUTRAL'; signal.levels = null; }
   signal.symbol = symbol; signal.fastTf = '1m'; signal.slowTf = '5m'; signal.profile = 'scalp';
-  signal = applyNews(signal, await assessNews(symbol, { beforeMin: s.newsBeforeMin }));
+  // A 3-minute trade is over long before news 30+ min away, so only look 30 min
+  // ahead (the default 90 min halved confidence and kept the scalper on WAIT).
+  signal = applyNews(signal, await assessNews(symbol, { beforeMin: 30 }));
   signal = deriveAdvice(signal, { weakMin: 55, strongMin: 70 });
 
   if (signal.levels && signal.stance !== 'WAIT') {
