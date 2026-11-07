@@ -1,0 +1,18 @@
+{
+  "name": "Your Name",
+  "title_keywords": ["engineer", "developer"],
+  "skills": ["python", "sql"],
+  "locations": ["Bangalore", "Remote"],
+  "deal_breakers": ["director", "intern"],
+  "blocklist": [],
+  "facts": [
+    {"id": "f1", "text": "One true, specific statement about your experience, with real numbers."},
+    {"id": "f2", "text": "Another one. The tailoring step may ONLY use what is written here."}
+  ],
+  "contact": {
+    "first_name": "Your", "last_name": "Name", "email": "you@example.com", "phone": "+91 00000 00000",
+    "linkedin": "https://linkedin.com/in/you", "github": "https://github.com/you", "location": "Bangalore"
+  },
+  "resume_path": "D:/path/to/resume.pdf",
+  "answers": {"authorized to work": "Yes", "notice period": "30 days"}
+}
