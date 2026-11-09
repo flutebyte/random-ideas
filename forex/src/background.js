@@ -7,6 +7,7 @@ import { computeSignal, combineTimeframes, deriveAdvice } from './engine/signal.
 import { geminiFilter, applyLlm } from './engine/gemini.js';
 import { assessNews, applyNews } from './engine/news.js';
 import { resampleTo4h, liveAnalyze } from './engine/tori.js';
+import { closedContiguous, mergeLive, resample } from './engine/live.js';
 
 const DEFAULTS = {
   fastTf: '15m',
@@ -57,17 +58,30 @@ const SCALP_OPTS = {
 };
 const SCALP_MAX_COST_R = 0.08, SCALP_HOLD_BARS = 3;
 
-async function analyzeScalp(symbol, s) {
-  const [fastData, slowData] = await Promise.all([
-    fetchCandles(symbol, '1m', '1d'),
-    fetchCandles(symbol, '5m', '5d')
-  ]);
+async function analyzeScalp(symbol, s, liveBars) {
+  // Yahoo (delayed ~10 min, futures price) provides history only. Fresh bars come
+  // from the TradingView chart itself (broker feed) when the page sends them.
+  const yahoo = await fetchCandles(symbol, '1m', '2d');
+  let c1 = yahoo.candles, feed = 'yahoo', offset = 0;
+  if (Array.isArray(liveBars) && liveBars.length) {
+    const m = mergeLive(yahoo.candles, closedContiguous(liveBars));
+    if (m.ok) { c1 = m.candles; feed = 'live'; offset = m.offset; }
+    else if (m.reason === 'warmup') {
+      return { ok: false, symbol, error: `Warming up live feed: ~${m.needMin} more min of chart data needed to line Yahoo up with your broker price (Yahoo is ~10 min delayed). Keep this TradingView tab open and visible.` };
+    }
+  }
+  const ageSec = (Date.now() - (c1[c1.length - 1].t + 60000)) / 1000;
+  if (ageSec > 150) {
+    return { ok: false, symbol, error: `Price data is ${Math.round(ageSec / 60)} min old — too stale for a 3-minute scalp. Skipped. (Needs the live chart feed: keep the TradingView tab open and visible.)` };
+  }
+  const fastData = { candles: c1 };
+  const slowData = { candles: resample(c1, 300000) };
   const fastSig = computeSignal(fastData.candles, SCALP_OPTS);
   const slowSig = computeSignal(slowData.candles, SCALP_OPTS);
   let signal = combineTimeframes(fastSig, slowSig, 'context');
   if (!signal.ok) return { ok: false, error: signal.error || 'analysis failed', symbol };
   if (signal.alignment !== 'aligned') { signal.action = 'NEUTRAL'; signal.levels = null; }
-  signal.symbol = symbol; signal.fastTf = '1m'; signal.slowTf = '5m'; signal.profile = 'scalp';
+  signal.symbol = symbol; signal.fastTf = '1m'; signal.slowTf = '5m'; signal.profile = 'scalp'; signal.feed = feed; signal.feedOffset = offset; signal.dataAgeSec = Math.round(ageSec);
   // A 3-minute trade is over long before news 30+ min away, so only look 30 min
   // ahead (the default 90 min halved confidence and kept the scalper on WAIT).
   signal = applyNews(signal, await assessNews(symbol, { beforeMin: 30 }));
@@ -86,8 +100,8 @@ async function analyzeScalp(symbol, s) {
   return signal;
 }
 
-async function analyzeIndex(symbol, s) {
-  if (s.indexMode !== 'swing') return analyzeScalp(symbol, s);
+async function analyzeIndex(symbol, s, liveBars) {
+  if (s.indexMode !== 'swing') return analyzeScalp(symbol, s, liveBars);
   const [fastData, slowData] = await Promise.all([
     fetchCandles(symbol, '1h', '6mo'),
     fetchCandles(symbol, '1d', '2y')
@@ -105,9 +119,9 @@ async function analyzeIndex(symbol, s) {
   return signal;
 }
 
-async function analyze(symbol) {
+async function analyze(symbol, liveBars) {
   const s = await getSettings();
-  if (isIndex(symbol)) return analyzeIndex(symbol, s);
+  if (isIndex(symbol)) return analyzeIndex(symbol, s, liveBars);
   if (s.engine === 'tori') return analyzeTori(symbol, s);
   const rangeFor = tf => {
     if (tf === '1mo') return '10y';   // ~120 monthly candles
@@ -229,7 +243,7 @@ function maybeNotify(symbol, signal, s) {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === 'ANALYZE') {
-    analyze(msg.symbol)
+    analyze(msg.symbol, msg.liveBars)
       .then(sendResponse)
       .catch(e => sendResponse({ ok: false, error: String(e.message || e), symbol: msg.symbol }));
     return true; // async response

@@ -37,13 +37,16 @@ export function toYahooSymbol(raw) {
     NDX: '^NDX', NAS100: 'NQ=F', US100: 'NQ=F', NQ1: 'NQ=F', USTEC: 'NQ=F', IXIC: '^IXIC',
     DJI: '^DJI', US30: 'YM=F', DJ30: 'YM=F', DOW: '^DJI', YM1: 'YM=F',
     RUT: '^RUT', US2000: 'RTY=F', VIX: '^VIX',
-    DAX: '^GDAXI', GER40: '^GDAXI', DE40: '^GDAXI', DE30: '^GDAXI',
+    DAX: '^GDAXI', DE40: '^GDAXI', GER30: '^GDAXI', GER40: '^GDAXI', DE40: '^GDAXI', DE30: '^GDAXI',
     UK100: '^FTSE', FTSE: '^FTSE', FTSE100: '^FTSE',
     NI225: '^N225', JP225: '^N225', NIKKEI: '^N225',
     HSI: '^HSI', HK50: '^HSI', CAC40: '^FCHI', FRA40: '^FCHI',
-    NIFTY: '^NSEI', NIFTY50: '^NSEI', SENSEX: '^BSESN'
+    HK33: '^HSI', AU200: '^AXJO', ASX200: '^AXJO', NIFTY: '^NSEI', NIFTY50: '^NSEI', SENSEX: '^BSESN'
   };
-  if (indexMap[s]) return indexMap[s];
+  // Broker CFD names carry the quote currency: SPX500USD, NAS100USD, US30USD,
+  // DE30EUR, UK100GBP, JP225USD, HK33HKD ... strip it and retry.
+  const idxKey = indexMap[s] ? s : s.replace(/(USD|EUR|GBP|JPY|AUD|HKD|CHF|CAD)$/, '');
+  if (indexMap[idxKey]) return indexMap[idxKey];
 
   // crypto (…USDT/…USD against a coin)
   const cryptoBases = ['BTC', 'ETH', 'SOL', 'XRP', 'ADA', 'DOGE', 'BNB', 'LTC', 'DOT', 'AVAX'];
@@ -59,8 +62,8 @@ export function toYahooSymbol(raw) {
   // metals / already-suffixed
   if (s.endsWith('=X') || s.endsWith('=F') || s.includes('-')) return s;
 
-  // fallback: treat as forex pair
-  return `${s}=X`;
+  // unknown name: fail clearly instead of inventing a bogus "=X" ticker (HTTP 404)
+  return null;
 }
 
 function intervalToMs(iv) {

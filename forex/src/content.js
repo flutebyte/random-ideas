@@ -8,6 +8,32 @@
   let autoTimer = null;
   let lastSymbol = null;
 
+  // ---- live price sampler ----------------------------------------------
+  // Samples the chart price (from the page title) every second into 1-minute
+  // bars. This is the user's real broker feed; Yahoo is ~10 min delayed and
+  // quotes futures, so the background worker fuses the two (engine/live.js).
+  const TICK = (window.__flLive = { bars: [], price: null, sym: null });
+  function priceFromTitle(t) {
+    const m = String(t || '').match(/\s(\d[\d,]*\.?\d*)\s*[▲▼▶]/) || String(t || '').match(/\s(\d[\d,]*\.\d+)\s/);
+    const v = m ? parseFloat(m[1].replace(/,/g, '')) : NaN;
+    return v > 0 ? v : null;
+  }
+  function loadBars(sym) {
+    try { TICK.bars = JSON.parse(localStorage.getItem('fl-bars-' + sym) || '[]'); } catch { TICK.bars = []; }
+    TICK.sym = sym;
+  }
+  setInterval(() => {
+    if (manualSymbol) return;                       // price on screen is for the chart symbol
+    const sym = detectSymbol(), p = priceFromTitle(document.title);
+    if (!sym || !p) return;
+    if (TICK.sym !== sym) loadBars(sym);
+    TICK.price = p;
+    const t = Math.floor(Date.now() / 60000) * 60000, last = TICK.bars[TICK.bars.length - 1];
+    if (last && last.t === t) { last.h = Math.max(last.h, p); last.l = Math.min(last.l, p); last.c = p; }
+    else { TICK.bars.push({ t, o: p, h: p, l: p, c: p }); if (TICK.bars.length > 400) TICK.bars.shift(); }
+  }, 1000);
+  setInterval(() => { if (TICK.sym) try { localStorage.setItem('fl-bars-' + TICK.sym, JSON.stringify(TICK.bars)); } catch {} }, 10000);
+
   // ---- symbol detection ------------------------------------------------
   function detectSymbol() {
     if (manualSymbol) return manualSymbol;
@@ -189,18 +215,8 @@
       `<div class="fl-r"><span class="fl-dot ${r.vote}"></span>${r.name}
        <span class="fl-rd">${r.detail}</span></div>`).join('');
 
-    if (sig.levels) {
-      const L = sig.levels;
-      $('#fl-levels').innerHTML =
-        `<div class="fl-lv">
-          <span>entry <b>${fmtPx(L.entry)}</b></span>
-          <span class="sell">stop <b>${fmtPx(L.stop)}</b></span>
-          <span class="buy">target <b>${fmtPx(L.target)}</b></span>
-          <span>R:R 1:${L.rr}</span>
-        </div>`;
-    } else {
-      $('#fl-levels').innerHTML = '<div class="fl-lv fl-muted">No trade — waiting for confluence.</div>';
-    }
+    lastLevels = sig.levels || null; lastFeed = sig.feed || null;
+    renderLevels();
 
     // ---- news layer: RED (high-impact) events take over the panel ----
     renderNews(sig);
@@ -275,6 +291,32 @@
   }
   function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // Levels are shown as POINT DISTANCES (feed-independent) and re-based onto the
+  // broker price the user types, because Yahoo's feed (futures, delayed) differs
+  // from the broker's CFD price by a moving premium.
+  let lastLevels = null, lastFeed = null;
+  function renderLevels() {
+    const box = $('#fl-levels');
+    if (!lastLevels) { box.innerHTML = '<div class="fl-lv fl-muted">No trade — waiting for confluence.</div>'; return; }
+    const L = lastLevels, buy = L.target > L.entry;
+    const risk = Math.abs(L.entry - L.stop), reward = Math.abs(L.target - L.entry);
+    const fresh = Date.now() - Number(localStorage.getItem('fl-mypx-t') || 0) < 120000; // expires after 2 min
+    const my = fresh ? parseFloat(localStorage.getItem('fl-mypx')) : NaN;
+    const e = my > 0 ? my : (lastFeed === 'live' && TICK.price ? TICK.price : L.entry);
+    const st = buy ? e - risk : e + risk, tg = buy ? e + reward : e - reward;
+    box.innerHTML =
+      `<div class="fl-lv">
+         <span>entry <b>${fmtPx(e)}</b></span>
+         <span class="sell">stop <b>${fmtPx(st)}</b> (${buy ? '-' : '+'}${risk.toFixed(1)} pts)</span>
+         <span class="buy">target <b>${fmtPx(tg)}</b> (${buy ? '+' : '-'}${reward.toFixed(1)} pts)</span>
+         <span>R:R 1:${L.rr}</span>
+       </div>
+       <div class="fl-lv"><span>your broker price: <input id="fl-mypx" type="number" step="0.01" style="width:90px" value="${my > 0 ? my : ''}" placeholder="${fmtPx(L.entry)}"/>
+         <small class="fl-muted">${my > 0 ? 're-based (expires in 2 min)' : 'type it to re-base levels (feed price differs)'}</small></span></div>`;
+    const inp = $('#fl-mypx');
+    inp.addEventListener('change', () => { localStorage.setItem('fl-mypx', inp.value || ''); localStorage.setItem('fl-mypx-t', Date.now()); renderLevels(); });
+  }
+
   // ---- run cycle -------------------------------------------------------
   let busy = false;
   function run(force) {
@@ -291,7 +333,8 @@
     if (busy && !force) return;
     busy = true;
     $('#fl-badge').textContent = '…';
-    chrome.runtime.sendMessage({ type: 'ANALYZE', symbol: sym }, resp => {
+    const liveBars = !manualSymbol && TICK.sym === sym ? TICK.bars : null;
+    chrome.runtime.sendMessage({ type: 'ANALYZE', symbol: sym, liveBars }, resp => {
       busy = false;
       if (chrome.runtime.lastError) {
         render({ ok: false, error: chrome.runtime.lastError.message });
