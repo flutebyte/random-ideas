@@ -23,8 +23,9 @@
     TICK.sym = sym;
   }
   setInterval(() => {
-    if (manualSymbol) return;                       // price on screen is for the chart symbol
-    const sym = detectSymbol(), p = priceFromTitle(document.title);
+    const sym = detectChartSymbol(), p = priceFromTitle(document.title);
+    // price on screen is for the chart symbol; a typed symbol only counts if it IS the chart's
+    if (manualSymbol && normSym(manualSymbol) !== normSym(sym)) return;
     if (!sym || !p) return;
     if (TICK.sym !== sym) loadBars(sym);
     TICK.price = p;
@@ -35,8 +36,13 @@
   setInterval(() => { if (TICK.sym) try { localStorage.setItem('fl-bars-' + TICK.sym, JSON.stringify(TICK.bars)); } catch {} }, 10000);
 
   // ---- symbol detection ------------------------------------------------
+  function normSym(s) {
+    return String(s || '').toUpperCase().split(':').pop().split(',')[0].replace(/[^A-Z0-9]/g, '');
+  }
   function detectSymbol() {
-    if (manualSymbol) return manualSymbol;
+    return manualSymbol || detectChartSymbol();
+  }
+  function detectChartSymbol() {
     // 1) URL ?symbol=FX:EURUSD
     const u = new URLSearchParams(location.search).get('symbol');
     if (u) return decodeURIComponent(u);
@@ -336,7 +342,7 @@
     if (busy && !force) return;
     busy = true;
     $('#fl-badge').textContent = '…';
-    const liveBars = !manualSymbol && TICK.sym === sym ? TICK.bars : null;
+    const liveBars = TICK.sym && normSym(TICK.sym) === normSym(sym) ? TICK.bars : null;
     chrome.runtime.sendMessage({ type: 'ANALYZE', symbol: sym, liveBars }, resp => {
       busy = false;
       if (chrome.runtime.lastError) {
