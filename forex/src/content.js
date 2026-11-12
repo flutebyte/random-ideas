@@ -333,7 +333,10 @@
     const isGold = /XAU|GOLD|GC=F/i.test(sym || '');
     $('#fl-sym').textContent = (isGold ? '🥇 ' : '') + (sym || '(no symbol)');
     const isIdx = /^(\^|SPX|SP500|US500|NDX|NAS100|US100|USTEC|DJI|US30|DJ30|DOW|RUT|US2000|DAX|GER40|DE40|UK100|FTSE|NI225|JP225|HSI|HK50|CAC40|FRA40|NIFTY|SENSEX)/i.test((sym || '').split(':').pop());
-    $('#fl-goldnote').innerHTML = sym && isIdx
+    const toriOn = $('#fl-engine').value === 'tori';
+    $('#fl-goldnote').innerHTML = toriOn
+      ? 'Tori 4h trendline-break strategy (from the video): BUY/SELL only on a 4h close through a 3-touch line; otherwise do nothing. Exit on the safety-line break.'
+      : sym && isIdx
       ? 'Index SCALP profile: 1m + 5m trend, 1:2 R:R, 3-min exit. Edge only exists if your spread is tiny — set it in the popup.'
       : sym && !isGold
       ? '⚠ This engine is tuned for <b>XAUUSD (gold)</b> — it has little edge here.'

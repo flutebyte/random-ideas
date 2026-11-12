@@ -124,8 +124,10 @@ async function analyzeIndex(symbol, s, liveBars) {
 
 async function analyze(symbol, liveBars) {
   const s = await getSettings();
-  if (isIndex(symbol)) return analyzeIndex(symbol, s, liveBars);
+  // The Tori (trendline) engine is the priority strategy: it runs for EVERY
+  // symbol, indices included. The index profiles only apply to the indicators engine.
   if (s.engine === 'tori') return analyzeTori(symbol, s);
+  if (isIndex(symbol)) return analyzeIndex(symbol, s, liveBars);
   const rangeFor = tf => {
     if (tf === '1mo') return '10y';   // ~120 monthly candles
     if (tf === '1wk') return '5y';    // ~260 weekly candles
@@ -172,15 +174,16 @@ async function analyzeTori(symbol, s) {
   const c4 = resampleTo4h(h1.candles);
   if (c4.length < 60) return { ok: false, error: 'Not enough 4h data for trendlines.', symbol };
 
-  const r = liveAnalyze(c4, { stopDist: s.toriStop, maxRisk: s.toriMaxRisk, rr: s.rr });
+  const r = liveAnalyze(c4, { maxRiskAtr: s.toriMaxRiskAtr });
   const price = r.price;
   const fmt = v => (v == null ? '—' : v >= 100 ? v.toFixed(1) : v.toFixed(4));
+  const unit = price >= 100 ? 'pts' : '';
 
   // nearest-line reasons (shown in every state)
   const lineReasons = (r.lines || []).map(L => ({
     name: L.kind === 'resistance' ? 'Resistance line' : 'Support line',
     vote: L.kind === 'resistance' ? 'bear' : 'bull',
-    detail: `${L.taps} taps · ${fmt(L.y)} (${L.dist >= 0 ? '$' + L.dist.toFixed(1) + ' away' : 'price past it'})`
+    detail: `${L.taps} touches · ${fmt(L.y)} (${L.dist >= 0 ? L.dist.toFixed(1) + ' ' + unit + ' away' : 'price past it'})`
   }));
 
   let signal = {
@@ -194,22 +197,25 @@ async function analyzeTori(symbol, s) {
     signal.action = g.action; signal.stance = g.action;
     signal.confidence = conf; signal.tier = conf >= 65 ? 'strong' : 'weak';
     signal.score = g.action === 'BUY' ? conf : -conf;
-    signal.levels = { entry: g.entry, stop: g.stop, target: g.target, rr: g.rr };
-    signal.advice = `4h TRENDLINE BREAK — ${g.action}. ${g.reason} (${g.taps} taps). ` +
-      `Enter now; stop $${s.toriStop} on the safety side (${fmt(g.stop)}) and TRAIL it as price moves. ` +
-      `First target 2R (${fmt(g.target)}). One shot per line.`;
+    // Her rules: no fixed target. Stop sits just beyond the SAFETY line (the
+    // opposite trendline) and trails along it; EXIT when price breaks that line.
+    const risk = Math.abs(g.entry - g.stop);
+    signal.levels = { entry: g.entry, stop: g.stop, target: g.action === 'BUY' ? g.entry + 2 * risk : g.entry - 2 * risk, rr: 2 };
+    signal.advice = `${g.action} NOW — 4h close ${g.action === 'BUY' ? 'above' : 'below'} a ${g.taps}-touch trendline ` +
+      `(${g.reason}). Stop ${fmt(g.stop)} just beyond the safety line (${risk.toFixed(1)} ${unit} risk) — trail it along ` +
+      `the safety line. No fixed target: EXIT when a 4h candle breaks the safety line. Optional 2R marker shown.`;
   } else if (r.state === 'skip') {
     signal.action = 'NEUTRAL'; signal.stance = 'WAIT'; signal.tier = 'wait';
     signal.confidence = 0; signal.score = 0;
-    signal.advice = `A break formed but SKIP — ${r.sig.skipReason}. Tori passes these; wait for a tighter setup.`;
+    signal.advice = `DON'T ${r.sig.action} — a break formed but ${r.sig.skipReason}. Too far from the safety line; Tori passes these. Wait for a tighter setup.`;
   } else if (r.state === 'watch') {
     signal.action = 'NEUTRAL'; signal.stance = 'WAIT'; signal.tier = 'wait';
     signal.confidence = 0; signal.score = 0;
     const near = (r.lines || []).map(L =>
-      `${L.kind} ${fmt(L.y)} ($${Math.abs(L.dist).toFixed(1)} ${L.dist >= 0 ? 'away' : 'past'})`).join(' · ');
+      `${L.kind} ${fmt(L.y)} (${Math.abs(L.dist).toFixed(1)} ${unit} ${L.dist >= 0 ? 'away' : 'past'})`).join(' · ');
     signal.advice = near
-      ? `No 4h break yet. Watching: ${near}. Enter only on a 4h CLOSE beyond a line.`
-      : `No A+ trendline right now. Nothing to do — wait for a qualifying line to form.`;
+      ? `DON'T BUY / SELL YET — no 4h break. Watching: ${near}. Buy only on a 4h CLOSE above the resistance line; sell only on a 4h CLOSE below the support line.`
+      : `DON'T TRADE — no qualifying 3-touch trendline right now. Wait for one to form.`;
   } else {
     return { ok: false, error: 'Not enough 4h history to draw trendlines yet.', symbol };
   }
