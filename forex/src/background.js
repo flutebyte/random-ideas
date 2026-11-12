@@ -66,8 +66,11 @@ async function analyzeScalp(symbol, s, liveBars) {
   if (Array.isArray(liveBars) && liveBars.length) {
     const m = mergeLive(yahoo.candles, closedContiguous(liveBars));
     if (m.ok) { c1 = m.candles; feed = 'live'; offset = m.offset; }
-    else if (m.reason === 'warmup') {
-      return { ok: false, symbol, error: `Warming up live feed: ~${m.needMin} more min of chart data needed to line Yahoo up with your broker price (Yahoo is ~10 min delayed). Keep this TradingView tab open and visible.` };
+    else if (m.reason === 'warmup' || m.reason === 'no-live') {
+      // no-live: the tab just opened, no closed 1m bar yet — need Yahoo's lag + overlap.
+      const lagMin = Math.ceil((Date.now() - yahoo.candles[yahoo.candles.length - 1].t) / 60000);
+      const need = m.reason === 'warmup' ? m.needMin : lagMin + 3;
+      return { ok: false, symbol, error: `Warming up live feed: ~${need} more min of chart data needed to line Yahoo up with your broker price (Yahoo is ~${lagMin} min delayed). Keep this TradingView tab open and visible.` };
     }
   }
   const ageSec = (Date.now() - (c1[c1.length - 1].t + 60000)) / 1000;
