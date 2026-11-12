@@ -46,8 +46,11 @@
     // 3) chart legend / header element
     const el = document.querySelector('[data-name="legend-source-title"], [class*="mainTitle"], [class*="symbolName"]');
     if (el && el.textContent) {
-      const t = el.textContent.trim().replace(/\s+/g, '');
-      if (/^[A-Za-z]{3,12}$/.test(t)) return t;
+      // The legend holds a logo-letter badge ("S") before the name; innerText
+      // puts it on its own line, so take the last line ("SPX 500, Daily").
+      const lines = (el.innerText || el.textContent).split('\n').map(x => x.trim()).filter(Boolean);
+      const t = (lines[lines.length - 1] || '').split(',')[0].trim().replace(/\s+/g, '');
+      if (/^[A-Za-z][A-Za-z0-9]{2,11}$/.test(t)) return t;
     }
     // 4) document.title, e.g. "EURUSD 1.0853 ..." or "EUR/USD, 1.08 ..."
     const m = document.title.match(/^([A-Za-z]{2,6}\/?[A-Za-z]{2,6})/);

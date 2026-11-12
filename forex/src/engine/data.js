@@ -15,6 +15,7 @@ export function toYahooSymbol(raw) {
   if (!raw) return null;
   let s = String(raw).toUpperCase().trim();
   if (s.includes(':')) s = s.split(':').pop();       // drop exchange prefix
+  s = s.split(',')[0].trim();                        // "SPX 500, DAILY" -> "SPX 500"
   const caret = s.startsWith('^');                   // already a Yahoo index ticker
   s = s.replace(/[^A-Z0-9]/g, '');
   if (caret) return '^' + s;
