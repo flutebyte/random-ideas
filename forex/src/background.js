@@ -58,7 +58,7 @@ const SCALP_OPTS = {
 };
 const SCALP_MAX_COST_R = 0.08, SCALP_HOLD_BARS = 3;
 
-async function analyzeScalp(symbol, s, liveBars) {
+async function analyzeScalp(symbol, s, liveBars, always = false) {
   // Yahoo (delayed ~10 min, futures price) provides history only. Fresh bars come
   // from the TradingView chart itself (broker feed) when the page sends them.
   const yahoo = await fetchCandles(symbol, '1m', '2d');
@@ -89,6 +89,32 @@ async function analyzeScalp(symbol, s, liveBars) {
   // ahead (the default 90 min halved confidence and kept the scalper on WAIT).
   signal = applyNews(signal, await assessNews(symbol, { beforeMin: 30 }));
   signal = deriveAdvice(signal, { weakMin: 55, strongMin: 70 });
+
+  // ALWAYS-A-CALL mode: never leave the scalper on WAIT. If the engines don't agree,
+  // lean with the 1m score (else the 5m score, else the last 3-bar move) and say plainly
+  // that it is a low-conviction call. Only a red-news blackout still stands aside.
+  if (always && !signal.newsBlackout && (signal.stance === 'WAIT' || !signal.levels)) {
+    const last = c1[c1.length - 1], back = c1[Math.max(0, c1.length - 4)];
+    const dir = Math.sign(fastSig.score) || Math.sign(slowSig.score) || Math.sign(last.c - back.c) || 1;
+    const a1 = fastSig.atr || signal.atr || (last.h - last.l) || 1;
+    const risk = SCALP_OPTS.atrMult * a1, up = dir > 0;
+    signal.action = signal.stance = up ? 'BUY' : 'SELL';
+    signal.tier = 'weak'; signal.forced = true;
+    signal.confidence = Math.min(signal.confidence || 40, 54);
+    signal.levels = { entry: last.c, stop: up ? last.c - risk : last.c + risk,
+      target: up ? last.c + risk * SCALP_OPTS.rr : last.c - risk * SCALP_OPTS.rr, rr: SCALP_OPTS.rr, riskPips: risk, rewardPips: risk * SCALP_OPTS.rr };
+    signal.advice = `${signal.stance} (low-conviction call — 1m/5m not fully aligned). `;
+  }
+
+  if (always && signal.levels && signal.stance !== 'WAIT') {
+    signal.scalp = { holdMin: SCALP_HOLD_BARS, spread: s.spreadPts || 0 };
+    const costR = (s.spreadPts || 0.3) / signal.levels.riskPips;
+    signal.advice = (signal.forced ? signal.advice : '') +
+      `${signal.forced ? '' : signal.stance + ' — '}ENTER now · stop ${signal.levels.stop.toFixed(2)} · target ${signal.levels.target.toFixed(2)} · ` +
+      `EXIT at market after ${SCALP_HOLD_BARS} min if neither is hit. Spread eats ~${(costR * 100).toFixed(0)}% of risk.`;
+    maybeNotify(symbol, signal, s);
+    return signal;
+  }
 
   if (signal.levels && signal.stance !== 'WAIT') {
     const costR = (s.spreadPts || 0.3) / signal.levels.riskPips;
@@ -126,6 +152,7 @@ async function analyze(symbol, liveBars) {
   const s = await getSettings();
   // The Tori (trendline) engine is the priority strategy: it runs for EVERY
   // symbol, indices included. The index profiles only apply to the indicators engine.
+  if (s.engine === 'scalp') return analyzeScalp(symbol, s, liveBars, true);   // 3-min scalper, ANY symbol
   if (s.engine === 'tori') return analyzeTori(symbol, s);
   if (isIndex(symbol)) return analyzeIndex(symbol, s, liveBars);
   const rangeFor = tf => {

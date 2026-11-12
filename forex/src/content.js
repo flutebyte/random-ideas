@@ -82,11 +82,13 @@
       <div id="fl-meta"></div>
       <div id="fl-reasons"></div>
       <div id="fl-levels"></div>
+      <div id="fl-paper"></div>
       <div id="fl-news"></div>
       <div id="fl-llm"></div>
       <div id="fl-engrow">
         <label>engine
           <select id="fl-engine">
+            <option value="scalp">Scalp (3-min, always a call)</option>
             <option value="tori">Tori (trendlines)</option>
             <option value="indicators">Indicators</option>
           </select>
@@ -169,7 +171,7 @@
   });
   function toggleTfRow() {
     // Tori is fixed to 4h — the confluence TF selectors don't apply there.
-    $('#fl-tfs').style.display = $('#fl-engine').value === 'tori' ? 'none' : 'flex';
+    $('#fl-tfs').style.display = ['tori', 'scalp'].includes($('#fl-engine').value) ? 'none' : 'flex';
   }
   function saveTf() {
     const settings = {
@@ -226,6 +228,7 @@
 
     lastLevels = sig.levels || null; lastFeed = sig.feed || null;
     renderLevels();
+    paperOnSignal(sig);
 
     // ---- news layer: RED (high-impact) events take over the panel ----
     renderNews(sig);
@@ -326,6 +329,60 @@
     inp.addEventListener('change', () => { localStorage.setItem('fl-mypx', inp.value || ''); localStorage.setItem('fl-mypx-t', Date.now()); renderLevels(); });
   }
 
+
+  // ---- paper trading tracker (scalp mode) ---------------------------------
+  // Every scalp call is "taken" in a simulated account using the LIVE chart price:
+  // stop -> -1R, target -> +2R, otherwise closed at market after the hold time.
+  // Results persist in localStorage so the win rate is real, not a backtest.
+  const PK = 'fl-paper-v1';
+  let paper = (() => { try { return JSON.parse(localStorage.getItem(PK)) || { open: null, closed: [] }; } catch { return { open: null, closed: [] }; } })();
+  function paperSave() { try { localStorage.setItem(PK, JSON.stringify({ open: paper.open, closed: paper.closed.slice(-300) })); } catch {} }
+  let spreadPts = 0;
+  chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, s => { if (!chrome.runtime.lastError && s) spreadPts = Number(s.spreadPts) || 0; });
+
+  function paperOnSignal(sig) {
+    if (!sig || !sig.ok || !sig.scalp || !sig.levels || !TICK.price) return;
+    if (paper.open) return;                                   // one paper trade at a time
+    const buy = sig.levels.target > sig.levels.entry;
+    const risk = Math.abs(sig.levels.entry - sig.levels.stop), reward = Math.abs(sig.levels.target - sig.levels.entry);
+    const e = TICK.price;                                     // fill at the live chart price
+    paper.open = { sym: sig.symbol, side: buy ? 'BUY' : 'SELL', e, stop: buy ? e - risk : e + risk, target: buy ? e + reward : e - reward,
+      risk, t: Date.now(), holdMs: sig.scalp.holdMin * 60000, forced: !!sig.forced };
+    paperSave(); paperRender();
+  }
+  function paperTick() {
+    const o = paper.open, p = TICK.price;
+    if (!o || !p) return;
+    const buy = o.side === 'BUY';
+    let exit = null, why = '';
+    if (buy ? p <= o.stop : p >= o.stop) { exit = o.stop; why = 'stop'; }
+    else if (buy ? p >= o.target : p <= o.target) { exit = o.target; why = 'target'; }
+    else if (Date.now() - o.t >= o.holdMs) { exit = p; why = 'time'; }
+    if (exit == null) { paperRender(); return; }
+    const pnl = (buy ? exit - o.e : o.e - exit) - spreadPts;
+    paper.closed.push({ ...o, exit, why, r: pnl / o.risk, tEnd: Date.now() });
+    paper.open = null; paperSave(); paperRender();
+    setTimeout(() => run(true), 500);                         // immediately look for the next call
+  }
+  function paperRender() {
+    const box = $('#fl-paper'); if (!box) return;
+    const c = paper.closed, n = c.length, w = c.filter(t => t.r > 0).length, net = c.reduce((a, t) => a + t.r, 0);
+    const o = paper.open;
+    let openTxt = '<span class="fl-muted">no open paper trade — next call opens one</span>';
+    if (o) {
+      const left = Math.max(0, Math.round((o.t + o.holdMs - Date.now()) / 1000));
+      const live = TICK.price ? ((o.side === 'BUY' ? TICK.price - o.e : o.e - TICK.price) / o.risk) : 0;
+      openTxt = `<b>${o.side}</b> @ ${fmtPx(o.e)} · exit ${String(Math.floor(left / 60))}:${String(left % 60).padStart(2, '0')} · now ${live >= 0 ? '+' : ''}${live.toFixed(2)}R`;
+    }
+    box.innerHTML = `<div class="fl-lv"><span>📝 paper: ${openTxt}</span></div>
+      <div class="fl-lv"><span>${n} trades · ${n ? Math.round(100 * w / n) : 0}% win · net <b class="${net >= 0 ? 'buy' : 'sell'}">${net.toFixed(2)}R</b> <small class="fl-muted">(after ${spreadPts} pt spread)</small>
+      <a href="#" id="fl-paper-reset" class="fl-muted">reset</a></span></div>`;
+    const rs = $('#fl-paper-reset');
+    if (rs) rs.onclick = ev => { ev.preventDefault(); paper = { open: null, closed: [] }; paperSave(); paperRender(); };
+  }
+  setInterval(paperTick, 1000);
+  paperRender();
+
   // ---- run cycle -------------------------------------------------------
   let busy = false;
   function run(force) {
@@ -333,8 +390,10 @@
     const isGold = /XAU|GOLD|GC=F/i.test(sym || '');
     $('#fl-sym').textContent = (isGold ? '🥇 ' : '') + (sym || '(no symbol)');
     const isIdx = /^(\^|SPX|SP500|US500|NDX|NAS100|US100|USTEC|DJI|US30|DJ30|DOW|RUT|US2000|DAX|GER40|DE40|UK100|FTSE|NI225|JP225|HSI|HK50|CAC40|FRA40|NIFTY|SENSEX)/i.test((sym || '').split(':').pop());
-    const toriOn = $('#fl-engine').value === 'tori';
-    $('#fl-goldnote').innerHTML = toriOn
+    const toriOn = $('#fl-engine').value === 'tori', scalpOn = $('#fl-engine').value === 'scalp';
+    $('#fl-goldnote').innerHTML = scalpOn
+      ? 'Scalp mode: always a BUY/SELL call with entry, stop, target and a 3-min exit. Low-conviction calls are labelled. Every call is paper-traded below so you can see the real win rate.'
+      : toriOn
       ? 'Tori 4h trendline-break strategy (from the video): BUY/SELL only on a 4h close through a 3-touch line; otherwise do nothing. Exit on the safety-line break.'
       : sym && isIdx
       ? 'Index SCALP profile: 1m + 5m trend, 1:2 R:R, 3-min exit. Edge only exists if your spread is tiny — set it in the popup.'
