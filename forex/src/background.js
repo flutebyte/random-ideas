@@ -90,7 +90,9 @@ async function analyzeScalp(symbol, s, liveBars, always = false) {
   // from the TradingView chart itself (broker feed) when the page sends them.
   const yahoo = await fetchCandles(symbol, '1m', '2d');
   let c1 = yahoo.candles, feed = 'yahoo', offset = 0;
-  if (Array.isArray(liveBars) && liveBars.length) {
+  // Selective mode outside the NY-open window never trades, so it needs no live feed: skip warm-up/stale gates.
+  const idle = always && s.scalpSelective !== false && /^(weekend|outside)/.test(selectiveSetup(yahoo.candles, { score: 0 }, s).why || '');
+  if (!idle && Array.isArray(liveBars) && liveBars.length) {
     const m = mergeLive(yahoo.candles, closedContiguous(liveBars));
     if (m.ok) { c1 = m.candles; feed = 'live'; offset = m.offset; }
     else if (m.reason === 'warmup' || m.reason === 'no-live') {
