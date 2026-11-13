@@ -162,9 +162,13 @@ async function analyzeScalp(symbol, s, liveBars, always = false) {
     signal = { ...signal, action: sel.dir, stance: sel.dir, tier: 'strong', forced: false, selective: true,
       confidence: Math.max(signal.confidence || 0, 62), levels: sel.levels,
       advice: `${sel.dir} — opening-range break + fair value gap (${s.orbTf || 5}-min candles, ${s.orbRange || 5}-min range). ` };
-    signal.scalp = { holdMin: 60, spread: s.spreadPts || 0 };
+    const hold = s.orbHoldMin || 3;                          // short exit: tight 1.5x1m-ATR stop, 1R target, market exit after `hold` min
+    if (hold <= 15) { const e = signal.levels.entry, up = sel.dir === 'BUY', r = Math.max(1, 1.5 * (fastSig.atr || 1));
+      signal.levels = { entry: e, stop: up ? e - r : e + r, target: up ? e + r : e - r, rr: 1, riskPips: r, rewardPips: r }; }
+    sel.levels = signal.levels;
+    signal.scalp = { holdMin: hold, spread: s.spreadPts || 0 };
     const costR = (s.spreadPts || 0.3) / sel.levels.riskPips;
-    signal.advice += `ENTER now · stop ${sel.levels.stop.toFixed(2)} · target ${sel.levels.target.toFixed(2)} · target = ${s.orbRR || 1}x the risk — EXIT at market after 60 min if neither is hit. Spread eats ~${(costR * 100).toFixed(0)}% of risk.`;
+    signal.advice += `ENTER now · stop ${sel.levels.stop.toFixed(2)} · target ${sel.levels.target.toFixed(2)} · EXIT at market after ${hold} min if neither is hit. Spread eats ~${(costR * 100).toFixed(0)}% of risk.`;
     maybeNotify(symbol, signal, s);
     return signal;
   }
