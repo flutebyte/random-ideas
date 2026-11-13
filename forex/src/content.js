@@ -88,7 +88,8 @@
       <div id="fl-engrow">
         <label>engine
           <select id="fl-engine">
-            <option value="scalp">Scalp (3-min, always a call)</option>
+            <option value="scalp">Scalp (3-min, best setup only)</option>
+            <option value="scalp-any">Scalp (3-min, ANY time)</option>
             <option value="tori">Tori (trendlines)</option>
             <option value="indicators">Indicators</option>
           </select>
@@ -171,7 +172,7 @@
   });
   function toggleTfRow() {
     // Tori is fixed to 4h — the confluence TF selectors don't apply there.
-    $('#fl-tfs').style.display = ['tori', 'scalp'].includes($('#fl-engine').value) ? 'none' : 'flex';
+    $('#fl-tfs').style.display = ['tori', 'scalp', 'scalp-any'].includes($('#fl-engine').value) ? 'none' : 'flex';
   }
   function saveTf() {
     const settings = {
@@ -390,7 +391,7 @@
     const isGold = /XAU|GOLD|GC=F/i.test(sym || '');
     $('#fl-sym').textContent = (isGold ? '🥇 ' : '') + (sym || '(no symbol)');
     const isIdx = /^(\^|SPX|SP500|US500|NDX|NAS100|US100|USTEC|DJI|US30|DJ30|DOW|RUT|US2000|DAX|GER40|DE40|UK100|FTSE|NI225|JP225|HSI|HK50|CAC40|FRA40|NIFTY|SENSEX)/i.test((sym || '').split(':').pop());
-    const toriOn = $('#fl-engine').value === 'tori', scalpOn = $('#fl-engine').value === 'scalp';
+    const toriOn = $('#fl-engine').value === 'tori', scalpOn = ['scalp', 'scalp-any'].includes($('#fl-engine').value);
     $('#fl-goldnote').innerHTML = scalpOn
       ? 'Scalp mode: always a BUY/SELL call with entry, stop, target and a 3-min exit. Low-conviction calls are labelled. Every call is paper-traded below so you can see the real win rate.'
       : toriOn

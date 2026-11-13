@@ -235,6 +235,7 @@ async function analyze(symbol, liveBars) {
   const s = await getSettings();
   // The Tori (trendline) engine is the priority strategy: it runs for EVERY
   // symbol, indices included. The index profiles only apply to the indicators engine.
+  if (s.engine === 'scalp-any') return analyzeScalp(symbol, { ...s, scalpSelective: false }, liveBars, true);   // any time of day, always a call
   if (s.engine === 'scalp') return analyzeScalp(symbol, s, liveBars, true);   // 3-min scalper, ANY symbol
   if (s.engine === 'tori') return analyzeTori(symbol, s);
   if (isIndex(symbol)) return analyzeIndex(symbol, s, liveBars);
