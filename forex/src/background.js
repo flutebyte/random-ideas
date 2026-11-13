@@ -76,7 +76,7 @@ export function orbFvgSetup(c1, now = Date.now(), s = {}) {
   if (min > 930) return { ok: false, why: 'past 15:30 New York — too close to the US close, no new trades today.' };
   const bars = resample(c1.filter(b => now - b.t < 20 * 3600e3), T, now).filter(b => { const m = nyMinutes(b.t); return m.wd === wd && m.min >= 570 && m.min <= 930; });
   const or = bars.filter(b => nyMinutes(b.t).min < 570 + rng);
-  if (or.length < Math.max(2, Math.floor(rng / tf) - 1)) return { ok: false, why: 'not enough opening-range candles in the data yet.' };
+  if (or.length < Math.max(1, Math.floor(rng / tf) - 1)) return { ok: false, why: 'not enough opening-range candles in the data yet.' };
   const hi = Math.max(...or.map(b => b.h)), lo = Math.min(...or.map(b => b.l));
   const rest = bars.filter(b => nyMinutes(b.t).min >= 570 + rng);
   const last = rest[rest.length - 1];
