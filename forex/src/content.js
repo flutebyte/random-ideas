@@ -348,7 +348,7 @@
     const risk = Math.abs(sig.levels.entry - sig.levels.stop), reward = Math.abs(sig.levels.target - sig.levels.entry);
     const e = TICK.price;                                     // fill at the live chart price
     paper.open = { sym: sig.symbol, side: buy ? 'BUY' : 'SELL', e, stop: buy ? e - risk : e + risk, target: buy ? e + reward : e - reward,
-      risk, t: Date.now(), holdMs: sig.scalp.holdMin * 60000, forced: !!sig.forced };
+      risk, t: Date.now(), holdMs: Math.min(3, sig.scalp.holdMin) * 60000, forced: !!sig.forced };
     paperSave(); paperRender();
   }
   function paperTick() {
@@ -358,7 +358,7 @@
     let exit = null, why = '';
     if (buy ? p <= o.stop : p >= o.stop) { exit = o.stop; why = 'stop'; }
     else if (buy ? p >= o.target : p <= o.target) { exit = o.target; why = 'target'; }
-    else if (Date.now() - o.t >= o.holdMs) { exit = p; why = 'time'; }
+    else if (Date.now() - o.t >= Math.min(o.holdMs, 180000)) { exit = p; why = 'time'; }
     if (exit == null) { paperRender(); return; }
     const pnl = (buy ? exit - o.e : o.e - exit) - spreadPts;
     paper.closed.push({ ...o, exit, why, r: pnl / o.risk, tEnd: Date.now() });
@@ -371,7 +371,7 @@
     const o = paper.open;
     let openTxt = '<span class="fl-muted">no open paper trade — next call opens one</span>';
     if (o) {
-      const left = Math.max(0, Math.round((o.t + o.holdMs - Date.now()) / 1000));
+      const left = Math.max(0, Math.round((o.t + Math.min(o.holdMs, 180000) - Date.now()) / 1000));
       const live = TICK.price ? ((o.side === 'BUY' ? TICK.price - o.e : o.e - TICK.price) / o.risk) : 0;
       openTxt = `<b>${o.side}</b> @ ${fmtPx(o.e)} · exit ${String(Math.floor(left / 60))}:${String(left % 60).padStart(2, '0')} · now ${live >= 0 ? '+' : ''}${live.toFixed(2)}R`;
     }
