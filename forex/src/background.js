@@ -64,6 +64,36 @@ function nyMinutes(ms) {
   const g = t => parts.find(p => p.type === t)?.value;
   return { min: (Number(g('hour')) % 24) * 60 + Number(g('minute')), wd: g('weekday') };
 }
+
+// Opening-range breakout + fair-value-gap entry (from the "Scalping Strategy Works Everyday" video).
+// Range = first 5-min candle 09:30-09:35 NY. Break = a 1m candle CLOSES beyond it. Enter at the close of the 3rd candle of a
+// fair value gap formed after the break; stop = far end of the break candle; fixed 2R target. One trade per day (first signal).
+export function orbFvgSetup(c1, now = Date.now()) {
+  const { min, wd } = nyMinutes(now);
+  if (wd === 'Sat' || wd === 'Sun') return { ok: false, why: 'weekend.' };
+  if (min < 575) return { ok: false, why: `waiting for the 09:30-09:35 New York opening range to form (it is ${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')} in New York).` };
+  if (min > 690) return { ok: false, why: 'past 11:30 New York — the opening-range window is over for today.' };
+  const today = c1.filter(b => { const m = nyMinutes(b.t); return m.wd === wd && Math.abs(b.t - now) < 20 * 3600e3 && m.min >= 570 && m.min <= 690; });
+  const or = today.filter(b => nyMinutes(b.t).min < 575);
+  if (or.length < 4) return { ok: false, why: 'no 09:30-09:35 candles in the data yet.' };
+  const hi = Math.max(...or.map(b => b.h)), lo = Math.min(...or.map(b => b.l));
+  const rest = today.filter(b => nyMinutes(b.t).min >= 575);
+  const last = rest[rest.length - 1];
+  if (!last || now - (last.t + 60000) > 150000) return { ok: false, why: 'live 1-minute data is stale — keep the chart tab open and visible.' };
+  for (let i = 0; i < rest.length; i++) {
+    const B = rest[i], dir = B.c > hi ? 1 : B.c < lo ? -1 : 0; if (!dir) continue;
+    for (let k = i + 2; k < rest.length && k <= i + 8; k++) {
+      const a = rest[k - 2], z = rest[k];
+      if (!(dir > 0 ? z.l > a.h : z.h < a.l)) continue;
+      if (k !== rest.length - 1) return { ok: false, why: 'the opening-range setup already fired earlier — one trade per day, wait for tomorrow.' };
+      const e = z.c, stop = dir > 0 ? B.l : B.h, r = Math.abs(e - stop);
+      if (r < 0.5) return { ok: false, why: 'stop too tight to trade.' };
+      return { ok: true, dir: dir > 0 ? 'BUY' : 'SELL', levels: { entry: e, stop, target: dir > 0 ? e + 2 * r : e - 2 * r, rr: 2, riskPips: r, rewardPips: 2 * r } };
+    }
+  }
+  const lastB = rest[rest.length - 1];
+  return { ok: false, why: `range ${lo.toFixed(1)} – ${hi.toFixed(1)}; no candle has closed outside it with a fair value gap yet.${lastB ? '' : ''}` };
+}
 // Returns {ok, dir, levels} when the NY-open breakout setup is live on the latest closed 3m bar.
 export function selectiveSetup(c1, fastSig, s, now = Date.now()) {
   const { min, wd } = nyMinutes(now);
@@ -91,7 +121,7 @@ async function analyzeScalp(symbol, s, liveBars, always = false) {
   const yahoo = await fetchCandles(symbol, '1m', '2d');
   let c1 = yahoo.candles, feed = 'yahoo', offset = 0;
   // Selective mode outside the NY-open window never trades, so it needs no live feed: skip warm-up/stale gates.
-  const idle = always && s.scalpSelective !== false && /^(weekend|outside)/.test(selectiveSetup(yahoo.candles, { score: 0 }, s).why || '');
+  const idle = always && s.scalpSelective !== false && /^(weekend|outside|past)/.test((s.scalpStrategy === 'breakout10' ? selectiveSetup(yahoo.candles, { score: 0 }, s) : orbFvgSetup(yahoo.candles)).why || '') || nyMinutes(Date.now()).min < 570;
   if (!idle && Array.isArray(liveBars) && liveBars.length) {
     const m = mergeLive(yahoo.candles, closedContiguous(liveBars));
     if (m.ok) { c1 = m.candles; feed = 'live'; offset = m.offset; }
@@ -124,17 +154,17 @@ async function analyzeScalp(symbol, s, liveBars, always = false) {
   // when the last closed 3m candle breaks the previous 30-min (10 x 3m) range in the engine's
   // direction. Backtest (3m candles): SPX500 ~70-75% wins vs ~48% unfiltered. Tiny sample.
   if (always && s.scalpSelective !== false) {
-    const sel = selectiveSetup(c1, fastSig, s);
+    const sel = s.scalpStrategy === 'breakout10' ? selectiveSetup(c1, fastSig, s) : orbFvgSetup(c1);
     if (!sel.ok) {
       return { ...signal, ok: true, action: 'NEUTRAL', stance: 'WAIT', tier: 'wait', levels: null, forced: false,
         advice: `NO TRADE — ${sel.why} Waiting is the edge: unfiltered 3-min scalping loses money in backtests.`, selective: true };
     }
     signal = { ...signal, action: sel.dir, stance: sel.dir, tier: 'strong', forced: false, selective: true,
       confidence: Math.max(signal.confidence || 0, 62), levels: sel.levels,
-      advice: `${sel.dir} — NY-open breakout of the 30-min range. ` };
-    signal.scalp = { holdMin: 9, spread: s.spreadPts || 0 };
+      advice: `${sel.dir} — opening-range break + fair value gap. ` };
+    signal.scalp = { holdMin: 60, spread: s.spreadPts || 0 };
     const costR = (s.spreadPts || 0.3) / sel.levels.riskPips;
-    signal.advice += `ENTER now · stop ${sel.levels.stop.toFixed(2)} · target ${sel.levels.target.toFixed(2)} · EXIT at market after 9 min if neither is hit. Spread eats ~${(costR * 100).toFixed(0)}% of risk.`;
+    signal.advice += `ENTER now · stop ${sel.levels.stop.toFixed(2)} · target ${sel.levels.target.toFixed(2)} · target is 2x the risk — EXIT at market after 60 min if neither is hit. Spread eats ~${(costR * 100).toFixed(0)}% of risk.`;
     maybeNotify(symbol, signal, s);
     return signal;
   }
