@@ -69,7 +69,7 @@ function nyMinutes(ms) {
 // Range = first 5-min candle 09:30-09:35 NY. Break = a 1m candle CLOSES beyond it. Enter at the close of the 3rd candle of a
 // fair value gap formed after the break; stop = far end of the break candle; fixed 2R target. One trade per day (first signal).
 export function orbFvgSetup(c1, now = Date.now(), s = {}) {
-  const tf = s.orbTf || 3, rng = s.orbRange || 30, T = tf * 60000;      // candle size (min) and opening-range length (min)
+  const tf = s.orbTf || 5, rng = s.orbRange || 5, RR = s.orbRR || 1, T = tf * 60000;      // candle size (min) and opening-range length (min)
   const { min, wd } = nyMinutes(now), hm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   if (wd === 'Sat' || wd === 'Sun') return { ok: false, why: 'weekend.' };
   if (min < 570 + rng) return { ok: false, why: `waiting for the opening range (09:30-${hm(570 + rng)} New York) to form. It is ${hm(min)} in New York now.` };
@@ -89,7 +89,7 @@ export function orbFvgSetup(c1, now = Date.now(), s = {}) {
       if (k !== rest.length - 1) return { ok: false, why: 'the opening-range setup already fired earlier — one trade per day, wait for tomorrow.' };
       const e = z.c, stop = dir > 0 ? B.l : B.h, r = Math.abs(e - stop);
       if (r < 0.5) return { ok: false, why: 'stop too tight to trade.' };
-      return { ok: true, dir: dir > 0 ? 'BUY' : 'SELL', levels: { entry: e, stop, target: dir > 0 ? e + 2 * r : e - 2 * r, rr: 2, riskPips: r, rewardPips: 2 * r } };
+      return { ok: true, dir: dir > 0 ? 'BUY' : 'SELL', levels: { entry: e, stop, target: dir > 0 ? e + RR * r : e - RR * r, rr: RR, riskPips: r, rewardPips: RR * r } };
     }
   }
   return { ok: false, why: `range ${lo.toFixed(1)} – ${hi.toFixed(1)} (${tf}-min candles); none has closed outside it with a fair value gap yet.` };
@@ -161,10 +161,10 @@ async function analyzeScalp(symbol, s, liveBars, always = false) {
     }
     signal = { ...signal, action: sel.dir, stance: sel.dir, tier: 'strong', forced: false, selective: true,
       confidence: Math.max(signal.confidence || 0, 62), levels: sel.levels,
-      advice: `${sel.dir} — opening-range break + fair value gap (${s.orbTf || 3}-min candles, ${s.orbRange || 30}-min range). ` };
+      advice: `${sel.dir} — opening-range break + fair value gap (${s.orbTf || 5}-min candles, ${s.orbRange || 5}-min range). ` };
     signal.scalp = { holdMin: 60, spread: s.spreadPts || 0 };
     const costR = (s.spreadPts || 0.3) / sel.levels.riskPips;
-    signal.advice += `ENTER now · stop ${sel.levels.stop.toFixed(2)} · target ${sel.levels.target.toFixed(2)} · target is 2x the risk — EXIT at market after 60 min if neither is hit. Spread eats ~${(costR * 100).toFixed(0)}% of risk.`;
+    signal.advice += `ENTER now · stop ${sel.levels.stop.toFixed(2)} · target ${sel.levels.target.toFixed(2)} · target = ${s.orbRR || 1}x the risk — EXIT at market after 60 min if neither is hit. Spread eats ~${(costR * 100).toFixed(0)}% of risk.`;
     maybeNotify(symbol, signal, s);
     return signal;
   }

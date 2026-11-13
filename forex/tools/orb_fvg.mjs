@@ -5,7 +5,8 @@ import { fetchCandles } from '../src/engine/data.js';
 import { resample } from '../src/engine/live.js';
 const sym = process.argv[2] || 'SPX500', COST = Number(process.env.COST_PTS || 0.6), RR = Number(process.env.RR || 2);
 const TF = Number(process.env.TF || 1), RNG = Number(process.env.RANGE || 5);
-const f = await fetchCandles(sym, '1m', '7d'); const c = TF === 1 ? f.candles : resample(f.candles, TF * 60000, Date.now() + 1e9);
+const LONG = process.env.LONG === '1';                       // LONG=1: use 60 days of native 5m candles (TF must be 5)
+const f = await fetchCandles(sym, LONG ? '5m' : '1m', LONG ? '60d' : '7d'); const c = (TF === 1 || LONG) ? f.candles : resample(f.candles, TF * 60000, Date.now() + 1e9);
 const fmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit' });
 const ny = t => { const p = Object.fromEntries(fmt.formatToParts(new Date(t)).map(x => [x.type, x.value])); return { d: `${p.year}-${p.month}-${p.day}`, m: (p.hour % 24) * 60 + Number(p.minute) }; };
 const days = {}; c.forEach((b, i) => { const n = ny(b.t); (days[n.d] ||= []).push({ ...b, m: n.m }); });
