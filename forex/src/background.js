@@ -101,7 +101,8 @@ async function analyzeScalp(symbol, s, liveBars, always = false) {
     }
   }
   const ageSec = (Date.now() - (c1[c1.length - 1].t + 60000)) / 1000;
-  if (ageSec > 150) {
+  // In selective mode stale data is fine: selectiveSetup() says NO TRADE (outside window / stale bar) itself.
+  if (ageSec > 150 && !(always && s.scalpSelective !== false)) {
     return { ok: false, symbol, error: `Price data is ${Math.round(ageSec / 60)} min old — too stale for a 3-minute scalp. Skipped. (Needs the live chart feed: keep the TradingView tab open and visible.)` };
   }
   const fastData = { candles: c1 };
