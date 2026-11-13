@@ -72,8 +72,8 @@ export function orbFvgSetup(c1, now = Date.now()) {
   const { min, wd } = nyMinutes(now);
   if (wd === 'Sat' || wd === 'Sun') return { ok: false, why: 'weekend.' };
   if (min < 575) return { ok: false, why: `waiting for the 09:30-09:35 New York opening range to form (it is ${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')} in New York).` };
-  if (min > 690) return { ok: false, why: 'past 11:30 New York — the opening-range window is over for today.' };
-  const today = c1.filter(b => { const m = nyMinutes(b.t); return m.wd === wd && Math.abs(b.t - now) < 20 * 3600e3 && m.min >= 570 && m.min <= 690; });
+  if (min > 930) return { ok: false, why: 'past 15:30 New York — too close to the US close, no new trades today.' };
+  const today = c1.filter(b => { const m = nyMinutes(b.t); return m.wd === wd && Math.abs(b.t - now) < 20 * 3600e3 && m.min >= 570 && m.min <= 930; });
   const or = today.filter(b => nyMinutes(b.t).min < 575);
   if (or.length < 4) return { ok: false, why: 'no 09:30-09:35 candles in the data yet.' };
   const hi = Math.max(...or.map(b => b.h)), lo = Math.min(...or.map(b => b.l));

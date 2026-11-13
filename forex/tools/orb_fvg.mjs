@@ -11,7 +11,7 @@ let tot = 0, w = 0, n = 0;
 for (const [d, bars] of Object.entries(days)) {
   const or = bars.filter(b => b.m >= 570 && b.m < 575); if (or.length < 4) continue;
   const hi = Math.max(...or.map(b => b.h)), lo = Math.min(...or.map(b => b.l));
-  const rest = bars.filter(b => b.m >= 575 && b.m <= 690); let done = false;
+  const rest = bars.filter(b => b.m >= 575 && b.m <= Number(process.env.END_MIN || 690)); let done = false;
   for (let i = 0; i < rest.length && !done; i++) {
     const B = rest[i], dir = B.c > hi ? 1 : B.c < lo ? -1 : 0; if (!dir) continue;
     for (let k = i + 2; k < rest.length && k <= i + 8; k++) {            // FVG ending at bar k
